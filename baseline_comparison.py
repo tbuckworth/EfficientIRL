@@ -1,4 +1,6 @@
-from imitation.algorithms import bc, gail
+from imitation.algorithms import bc
+from imitation.algorithms.adversarial import gail
+
 from imitation.data import rollout
 from stable_baselines3 import PPO
 

@@ -3,7 +3,8 @@ import numpy as np
 import torch
 import imitation.data.types
 from imitation.data import rollout
-from imitation.algorithms import bc, gail
+from imitation.algorithms import bc
+from imitation.algorithms.adversarial import gail
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
