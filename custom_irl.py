@@ -77,7 +77,7 @@ class CustomIRL:
 
     def train(self, num_epochs=100000):
         minibatch_size=8196
-        batch_size = ...
+        batch_size = minibatch_size
         # vars(expert_transitions).keys()
         # dict_keys(['obs', 'acts', 'infos', 'next_obs', 'dones'])
         for epoch in range(num_epochs):
