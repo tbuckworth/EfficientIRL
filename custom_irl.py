@@ -1,9 +1,10 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import gymnasium as gym
 import numpy as np
 import torch
 import imitation.data.types
+from imitation.algorithms.base import DemonstrationAlgorithm, AnyTransitions
 from imitation.data import rollout
 from imitation.algorithms import bc
 from imitation.algorithms.adversarial import gail
@@ -43,11 +44,11 @@ from model import MlpModelNoFinalRelu
 #     def _predict(self, observation, deterministic: bool = False):
 #         return self.get_distribution(observation).get_actions(deterministic=deterministic)
 
-    # def predict(self, obs):
-    #     with torch.no_grad():
-    #         obs = torch.FloatTensor(obs).to(self.device)
-    #         act = self.act(obs)
-    #     return act.cpu().numpy()
+# def predict(self, obs):
+#     with torch.no_grad():
+#         obs = torch.FloatTensor(obs).to(self.device)
+#         act = self.act(obs)
+#     return act.cpu().numpy()
 
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     """
@@ -57,6 +58,7 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
     :return: schedule that computes
       current learning rate depending on remaining progress
     """
+
     def func(progress_remaining: float) -> float:
         """
         Progress will decrease from 1 (beginning) to 0.
@@ -68,26 +70,42 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 
     return func
 
-class CustomIRL:
-    def __init__(self, env, expert_demos):
+
+class CustomIRL(DemonstrationAlgorithm):
+    def __init__(self, env, expert_demos, *, demonstrations: Optional[AnyTransitions], lr=1e-3, T_max=100):
+        super().__init__(demonstrations=demonstrations)
+        self.current_consistency_coef = 10.
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.env = env
         self.expert_demos = expert_demos
         self.policy = EfficientIRLPolicy(env.observation_space, env.action_space, linear_schedule(0.001))
+        self.n_actions = env.action_space.n
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr)
+        self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max)
 
     def train(self, num_steps=1000):
-        minibatch_size=8196
+        minibatch_size = 8196
         batch_size = minibatch_size
-        # vars(expert_transitions).keys()
-        # dict_keys(['obs', 'acts', 'infos', 'next_obs', 'dones'])
+        max_ent = np.log(1 / self.n_actions)
         for epoch in range(num_steps):
             generator = self.get_generator(minibatch_size, batch_size)
             for sample in generator:
                 obs, acts, infos, next_obs, dones = sample
 
+                q, _ = self.policy(obs)
+                _, next_q = self.policy(next_obs)
 
+                log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
+                log_prob_expert = log_probs[torch.arange(len(q)), acts.to(torch.int64)]  # pick log-p of expert's act
+                loss1 = -(log_prob_expert - max_ent).mean()
 
-
+                q_taken = q[torch.arange(len(q)), acts.to(torch.int64)]
+                loss2 = ((q_taken - next_q) * (1 - dones)).pow(2).mean()
+                loss = loss1 + loss2 * self.current_consistency_coef
+                loss.backward()
+                self.optimizer.step()
+                self.lr_scheduler.step()
+                self.optimizer.zero_grad()
 
     def evaluate(self, num_episodes=10):
         """Evaluate the trained policy."""
