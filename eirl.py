@@ -82,7 +82,7 @@ class EIRLTrainingMetrics:
     """Container for the different components of Efficient IRL loss."""
 
     kl_loss: th.Tensor
-    entropy: Optional[th.Tensor]
+    # entropy: Optional[th.Tensor]
     consistency_loss: th.Tensor  # set to 0 if entropy is None
     prob_true_act: th.Tensor
     l2_norm: th.Tensor
@@ -136,10 +136,10 @@ class EfficientIRLLossCalculator:
 
         # policy.evaluate_actions's type signatures are incorrect.
         # See https://github.com/DLR-RM/stable-baselines3/issues/1679
-        (_, log_prob, entropy) = policy.evaluate_actions(
-            tensor_obs,  # type: ignore[arg-type]
-            acts,
-        )
+        # (_, log_prob, entropy) = policy.evaluate_actions(
+        #     tensor_obs,  # type: ignore[arg-type]
+        #     acts,
+        # )
 
         q, _ = policy(obs)
         _, next_q = policy(nobs)
@@ -169,7 +169,7 @@ class EfficientIRLLossCalculator:
         return EIRLTrainingMetrics(
             kl_loss=loss1,
             consistency_loss=loss2,
-            entropy=entropy,
+            # entropy=entropy,
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
