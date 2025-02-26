@@ -40,7 +40,7 @@ def main():
         demonstrations=expert_transitions,
         rng=rng,
     )
-    expert_eirl_trainer.train(n_epochs=10)
+    expert_eirl_trainer.train(n_epochs=50)
 
     expert_bc_trainer = bc.BC(
         observation_space=env.observation_space,
@@ -49,7 +49,7 @@ def main():
         rng=rng,
     )
 
-    expert_bc_trainer.train(n_epochs=10)
+    expert_bc_trainer.train(n_epochs=50)
 
     expert_rewards, _ = evaluate_policy(
         expert.policy, env, 10, return_episode_rewards=True
