@@ -39,16 +39,16 @@ def main():
         demonstrations=expert_transitions,
         rng=rng,
     )
-    expert_eirl_trainer.train(n_epochs=200)
+    expert_eirl_trainer.train(n_epochs=2)
     eirl_expert_rewards, _ = evaluate_policy(
         expert_eirl_trainer.policy, env, 10, return_episode_rewards=True
     )
-    print(f"EIRL Rewards: {eirl_expert_rewards}")
+    print(f"EIRL Rewards: {np.mean(eirl_expert_rewards)}")
 
     expert_rewards, _ = evaluate_policy(
         expert.policy, env, 10, return_episode_rewards=True
     )
-    print(f"Expert Rewards: {expert_rewards}")
+    print(f"Expert Rewards: {np.mean(expert_rewards)}")
 
 
 
