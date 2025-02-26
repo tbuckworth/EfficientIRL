@@ -312,7 +312,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             l2_weight: float = 0.0,
             device: Union[str, th.device] = "auto",
             custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
-            consistency_coef=10.,
+            consistency_coef=1.,
     ):
         """Builds EIRL.
 
