@@ -90,6 +90,11 @@ class EIRLTrainingMetrics:
     loss: th.Tensor
 
 
+def get_latents(policy, obs):
+    features = policy.extract_features(obs, policy.pi_features_extractor)
+    return policy.mlp_extractor.forward_actor(features)
+
+
 @dataclasses.dataclass(frozen=True)
 class EfficientIRLLossCalculator:
     """Functor to compute the loss used in Behavior Cloning."""
@@ -128,10 +133,10 @@ class EfficientIRLLossCalculator:
             A EIRLTrainingMetrics object with the loss and all the components it
             consists of.
         """
-        tensor_obs = types.map_maybe_dict(
-            util.safe_to_tensor,
-            types.maybe_unwrap_dictobs(obs),
-        )
+        # tensor_obs = types.map_maybe_dict(
+        #     util.safe_to_tensor,
+        #     types.maybe_unwrap_dictobs(obs),
+        # )
         acts = util.safe_to_tensor(acts)
 
         # policy.evaluate_actions's type signatures are incorrect.
@@ -140,16 +145,15 @@ class EfficientIRLLossCalculator:
         #     tensor_obs,  # type: ignore[arg-type]
         #     acts,
         # )
-
-        q, _ = policy(obs)
-        _, next_q = policy(nobs)
+        q = get_latents(policy, obs)
+        next_q = policy.predict_values(nobs).squeeze()
 
         log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
         log_prob_expert = log_probs[th.arange(len(q)), acts.to(th.int64)]  # pick log-p of expert's act
         loss1 = -(log_prob_expert - self.max_ent).mean()
 
         q_taken = q[th.arange(len(q)), acts.to(th.int64)]
-        loss2 = ((q_taken - next_q) * (1 - dones)).pow(2).mean()
+        loss2 = ((q_taken - next_q) * (1 - dones.float())).pow(2).mean()
         loss = loss1 + loss2 * self.consistency_coef
 
         prob_true_act = th.exp(log_prob_expert).mean()
