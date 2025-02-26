@@ -1,3 +1,5 @@
+from imitation.algorithms import bc
+
 import eirl
 import gymnasium as gym
 from imitation.data import rollout
@@ -23,7 +25,6 @@ def main():
     )
     expert.learn(10_000)  # set to 100_000 for better performance
 
-
     rng = np.random.default_rng()
     expert_rollouts = rollout.rollout(
         expert,
@@ -40,16 +41,30 @@ def main():
         rng=rng,
     )
     expert_eirl_trainer.train(n_epochs=10)
-    eirl_expert_rewards, _ = evaluate_policy(
-        expert_eirl_trainer.policy, env, 10, return_episode_rewards=True
+
+    expert_bc_trainer = bc.BC(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=expert_transitions,
+        rng=rng,
     )
-    print(f"EIRL Rewards: {np.mean(eirl_expert_rewards)}")
+
+    expert_bc_trainer.train(n_epochs=10)
 
     expert_rewards, _ = evaluate_policy(
         expert.policy, env, 10, return_episode_rewards=True
     )
     print(f"Expert Rewards: {np.mean(expert_rewards)}")
 
+    bc_expert_rewards, _ = evaluate_policy(
+        expert_bc_trainer.policy, env, 10, return_episode_rewards=True
+    )
+    print(f"BC Rewards: {np.mean(bc_expert_rewards)}")
+
+    eirl_expert_rewards, _ = evaluate_policy(
+        expert_eirl_trainer.policy, env, 10, return_episode_rewards=True
+    )
+    print(f"EIRL Rewards: {np.mean(eirl_expert_rewards)}")
 
 
 if __name__ == '__main__':
