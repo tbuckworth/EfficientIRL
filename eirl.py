@@ -387,8 +387,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             self.policy.parameters(),
             **optimizer_kwargs,
         )
-
-        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef)
+        max_ent = np.log(1/action_space.n)
+        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef, max_ent)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
