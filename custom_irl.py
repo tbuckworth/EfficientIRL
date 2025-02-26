@@ -75,15 +75,16 @@ class CustomIRL:
         self.expert_demos = expert_demos
         self.policy = EfficientIRLPolicy(env.observation_space, env.action_space, linear_schedule(0.001))
 
-    def train(self, num_epochs=100000):
+    def train(self, num_steps=1000):
         minibatch_size=8196
         batch_size = minibatch_size
         # vars(expert_transitions).keys()
         # dict_keys(['obs', 'acts', 'infos', 'next_obs', 'dones'])
-        for epoch in range(num_epochs):
+        for epoch in range(num_steps):
             generator = self.get_generator(minibatch_size, batch_size)
             for sample in generator:
                 obs, acts, infos, next_obs, dones = sample
+
 
 
 
