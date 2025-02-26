@@ -30,6 +30,7 @@ from imitation.data import rollout, types
 from imitation.policies import base as policy_base
 from imitation.util import logger as imit_logger
 from imitation.util import util
+from stable_baselines3.common.policies import BasePolicy
 
 
 @dataclasses.dataclass(frozen=True)
@@ -89,10 +90,10 @@ class EIRLTrainingMetrics:
     l2_loss: th.Tensor
     loss: th.Tensor
 
-
 def get_latents(policy, obs):
-    features = policy.extract_features(obs, policy.pi_features_extractor)
-    return policy.mlp_extractor.forward_actor(features)
+    features = BasePolicy.extract_features(policy, obs, policy.pi_features_extractor)
+    latent_pi = policy.mlp_extractor.forward_actor(features)
+    return policy.action_net(latent_pi)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -312,7 +313,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             l2_weight: float = 0.0,
             device: Union[str, th.device] = "auto",
             custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
-            consistency_coef=1.,
+            consistency_coef=10.,
     ):
         """Builds EIRL.
 
