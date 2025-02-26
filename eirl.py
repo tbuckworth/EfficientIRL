@@ -46,10 +46,10 @@ class BatchIteratorWithEpochEndCallback:
 
     def __post_init__(self) -> None:
         epochs_and_batches_specified = (
-            self.n_epochs is not None and self.n_batches is not None
+                self.n_epochs is not None and self.n_batches is not None
         )
         neither_epochs_nor_batches_specified = (
-            self.n_epochs is None and self.n_batches is None
+                self.n_epochs is None and self.n_batches is None
         )
         if epochs_and_batches_specified or neither_epochs_nor_batches_specified:
             raise ValueError(
@@ -79,11 +79,11 @@ class BatchIteratorWithEpochEndCallback:
 
 @dataclasses.dataclass(frozen=True)
 class EIRLTrainingMetrics:
-    """Container for the different components of behavior cloning loss."""
+    """Container for the different components of Efficient IRL loss."""
 
-    neglogp: th.Tensor
+    kl_loss: th.Tensor
     entropy: Optional[th.Tensor]
-    ent_loss: th.Tensor  # set to 0 if entropy is None
+    consistency_loss: th.Tensor  # set to 0 if entropy is None
     prob_true_act: th.Tensor
     l2_norm: th.Tensor
     l2_loss: th.Tensor
@@ -96,17 +96,26 @@ class EfficientIRLLossCalculator:
 
     ent_weight: float
     l2_weight: float
+    consistency_coef: float
+    max_ent: float
 
     def __call__(
-        self,
-        policy: policies.ActorCriticPolicy,
-        obs: Union[
-            types.AnyTensor,
-            types.DictObs,
-            Dict[str, np.ndarray],
-            Dict[str, th.Tensor],
-        ],
-        acts: Union[th.Tensor, np.ndarray],
+            self,
+            policy: policies.ActorCriticPolicy,
+            obs: Union[
+                types.AnyTensor,
+                types.DictObs,
+                Dict[str, np.ndarray],
+                Dict[str, th.Tensor],
+            ],
+            acts: Union[th.Tensor, np.ndarray],
+            nobs: Union[
+                types.AnyTensor,
+                types.DictObs,
+                Dict[str, np.ndarray],
+                Dict[str, th.Tensor],
+            ],
+            dones: Union[th.Tensor, np.ndarray],
     ) -> EIRLTrainingMetrics:
         """Calculate the supervised learning loss used to train the behavioral clone.
 
@@ -131,24 +140,36 @@ class EfficientIRLLossCalculator:
             tensor_obs,  # type: ignore[arg-type]
             acts,
         )
-        prob_true_act = th.exp(log_prob).mean()
-        log_prob = log_prob.mean()
-        entropy = entropy.mean() if entropy is not None else None
+
+        q, _ = policy(obs)
+        _, next_q = policy(nobs)
+
+        log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
+        log_prob_expert = log_probs[th.arange(len(q)), acts.to(th.int64)]  # pick log-p of expert's act
+        loss1 = -(log_prob_expert - self.max_ent).mean()
+
+        q_taken = q[th.arange(len(q)), acts.to(th.int64)]
+        loss2 = ((q_taken - next_q) * (1 - dones)).pow(2).mean()
+        loss = loss1 + loss2 * self.consistency_coef
+
+        prob_true_act = th.exp(log_prob_expert).mean()
+        # log_prob = log_prob.mean()
+        # entropy = entropy.mean() if entropy is not None else None
 
         l2_norms = [th.sum(th.square(w)) for w in policy.parameters()]
         l2_norm = sum(l2_norms) / 2  # divide by 2 to cancel with gradient of square
         # sum of list defaults to float(0) if len == 0.
         assert isinstance(l2_norm, th.Tensor)
 
-        ent_loss = -self.ent_weight * (entropy if entropy is not None else th.zeros(1))
-        neglogp = -log_prob
+        # ent_loss = -self.ent_weight * (entropy if entropy is not None else th.zeros(1))
+        # neglogp = -log_prob
         l2_loss = self.l2_weight * l2_norm
-        loss = neglogp + ent_loss + l2_loss
+        # loss = neglogp + ent_loss + l2_loss
 
         return EIRLTrainingMetrics(
-            neglogp=neglogp,
+            kl_loss=loss1,
+            consistency_loss=loss2,
             entropy=entropy,
-            ent_loss=ent_loss,
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
@@ -157,7 +178,7 @@ class EfficientIRLLossCalculator:
 
 
 def enumerate_batches(
-    batch_it: Iterable[types.TransitionMapping],
+        batch_it: Iterable[types.TransitionMapping],
 ) -> Iterable[Tuple[Tuple[int, int, int], types.TransitionMapping]]:
     """Prepends batch stats before the batches of a batch iterator."""
     num_samples_so_far = 0
@@ -185,9 +206,9 @@ class RolloutStatsComputer:
     #   https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback
 
     def __call__(
-        self,
-        policy: policies.ActorCriticPolicy,
-        rng: np.random.Generator,
+            self,
+            policy: policies.ActorCriticPolicy,
+            rng: np.random.Generator,
     ) -> Mapping[str, float]:
         if self.venv is not None and self.n_episodes > 0:
             trajs = rollout.generate_trajectories(
@@ -221,12 +242,12 @@ class EIRLLogger:
         self._current_epoch = epoch_number
 
     def log_batch(
-        self,
-        batch_num: int,
-        batch_size: int,
-        num_samples_so_far: int,
-        training_metrics: EIRLTrainingMetrics,
-        rollout_stats: Mapping[str, float],
+            self,
+            batch_num: int,
+            batch_size: int,
+            num_samples_so_far: int,
+            training_metrics: EIRLTrainingMetrics,
+            rollout_stats: Mapping[str, float],
     ):
         self._logger.record("batch_size", batch_size)
         self._logger.record("eirl/epoch", self._current_epoch)
@@ -248,8 +269,8 @@ class EIRLLogger:
 
 
 def reconstruct_policy(
-    policy_path: str,
-    device: Union[th.device, str] = "auto",
+        policy_path: str,
+        device: Union[th.device, str] = "auto",
 ) -> policies.ActorCriticPolicy:
     """Reconstruct a saved policy.
 
@@ -272,21 +293,22 @@ class EIRL(algo_base.DemonstrationAlgorithm):
     """
 
     def __init__(
-        self,
-        *,
-        observation_space: gym.Space,
-        action_space: gym.Space,
-        rng: np.random.Generator,
-        policy: Optional[policies.ActorCriticPolicy] = None,
-        demonstrations: Optional[algo_base.AnyTransitions] = None,
-        batch_size: int = 32,
-        minibatch_size: Optional[int] = None,
-        optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
-        optimizer_kwargs: Optional[Mapping[str, Any]] = None,
-        ent_weight: float = 1e-3,
-        l2_weight: float = 0.0,
-        device: Union[str, th.device] = "auto",
-        custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
+            self,
+            *,
+            observation_space: gym.Space,
+            action_space: gym.Space,
+            rng: np.random.Generator,
+            policy: Optional[policies.ActorCriticPolicy] = None,
+            demonstrations: Optional[algo_base.AnyTransitions] = None,
+            batch_size: int = 32,
+            minibatch_size: Optional[int] = None,
+            optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
+            optimizer_kwargs: Optional[Mapping[str, Any]] = None,
+            ent_weight: float = 1e-3,
+            l2_weight: float = 0.0,
+            device: Union[str, th.device] = "auto",
+            custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
+            consistency_coef=10.,
     ):
         """Builds EIRL.
 
@@ -366,7 +388,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             **optimizer_kwargs,
         )
 
-        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight)
+        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
@@ -379,17 +401,17 @@ class EIRL(algo_base.DemonstrationAlgorithm):
         )
 
     def train(
-        self,
-        *,
-        n_epochs: Optional[int] = None,
-        n_batches: Optional[int] = None,
-        on_epoch_end: Optional[Callable[[], None]] = None,
-        on_batch_end: Optional[Callable[[], None]] = None,
-        log_interval: int = 500,
-        log_rollouts_venv: Optional[vec_env.VecEnv] = None,
-        log_rollouts_n_episodes: int = 5,
-        progress_bar: bool = True,
-        reset_tensorboard: bool = False,
+            self,
+            *,
+            n_epochs: Optional[int] = None,
+            n_batches: Optional[int] = None,
+            on_epoch_end: Optional[Callable[[], None]] = None,
+            on_batch_end: Optional[Callable[[], None]] = None,
+            log_interval: int = 500,
+            log_rollouts_venv: Optional[vec_env.VecEnv] = None,
+            log_rollouts_n_episodes: int = 5,
+            progress_bar: bool = True,
+            reset_tensorboard: bool = False,
     ):
         """Train with supervised learning for some number of epochs.
 
@@ -481,9 +503,9 @@ class EIRL(algo_base.DemonstrationAlgorithm):
 
         self.optimizer.zero_grad()
         for (
-            batch_num,
-            minibatch_size,
-            num_samples_so_far,
+                batch_num,
+                minibatch_size,
+                num_samples_so_far,
         ), batch in batches_with_stats:
             obs_tensor: Union[th.Tensor, Dict[str, th.Tensor]]
             # unwraps the observation if it's a dictobs and converts arrays to tensors
@@ -492,7 +514,13 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 types.maybe_unwrap_dictobs(batch["obs"]),
             )
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
-            training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
+            nobs_tensor = types.map_maybe_dict(
+                lambda x: util.safe_to_tensor(x, device=self.policy.device),
+                types.maybe_unwrap_dictobs(batch["next_obs"]),
+            )
+            dones = util.safe_to_tensor(batch["dones"], device=self.policy.device)
+
+            training_metrics = self.loss_calculator(self.policy, obs_tensor, acts, nobs_tensor, dones)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.
