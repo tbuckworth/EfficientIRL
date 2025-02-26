@@ -39,7 +39,7 @@ def main():
         demonstrations=expert_transitions,
         rng=rng,
     )
-    expert_eirl_trainer.train(n_epochs=2)
+    expert_eirl_trainer.train(n_epochs=10)
     eirl_expert_rewards, _ = evaluate_policy(
         expert_eirl_trainer.policy, env, 10, return_episode_rewards=True
     )
