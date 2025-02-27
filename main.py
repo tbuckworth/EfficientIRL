@@ -13,11 +13,45 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3.common.evaluation import evaluate_policy
+from imitation.rewards.reward_nets import BasicRewardNet
+from imitation.util.networks import RunningNorm
+
+
+def eirl_constructor(env, expert_transitions, rng, expert):
+    return eirl.EIRL(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_transitions,
+            rng=rng,
+        ), 1
+def bc_constructor(env, expert_transitions, rng, expert):
+    return bc.BC(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_transitions,
+            rng=rng,
+        ), 1
+
+def gail_constructor(env, expert_transitions, rng, expert):
+    reward_net = BasicRewardNet(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        normalize_input_layer=RunningNorm,
+    )
+    return gail.GAIL(
+        demonstrations=expert_transitions,
+        demo_batch_size=1024,
+        gen_replay_buffer_capacity=512,
+        n_disc_updates_per_round=8,
+        venv=env,
+        gen_algo=expert,
+        reward_net=reward_net,
+    ), 1_000
 
 algos = {
-    "EIRL": eirl.EIRL,
-    "BC": bc.BC,
-    "GAIL": gail.GAIL,
+    "EIRL": eirl_constructor,
+    "BC": bc_constructor,
+    "GAIL": gail_constructor,
 }
 
 def main():
@@ -49,25 +83,33 @@ def main():
     )
     print(f"Expert Rewards: {np.mean(expert_rewards)}")
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
+    outputs = []
     for algo in algos.keys():
-        expert_trainer = algos[algo](
-            observation_space=env.observation_space,
-            action_space=env.action_space,
-            demonstrations=expert_transitions,
-            rng=rng,
-        )
-        start = time.time()
-        expert_trainer.train(n_epochs=epochs)
-        elapsed = time.time() - start
-        rewards, _ = evaluate_policy(
-            expert_trainer.policy, env, 10, return_episode_rewards=True
-        )
-        print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
-        rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
+        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, rng, expert)
+        cum_time = 0
+        for epoch in range(1, epochs+1):
+            start = time.time()
+            expert_trainer.train(epoch*unit_multiplier)
+            elapsed = time.time() - start
+            cum_time += elapsed
+            rewards, _ = evaluate_policy(
+                expert_trainer.policy, env, 10, return_episode_rewards=True
+            )
+            outputs += [{
+                "mean_reards": np.mean(rewards),
+                "std_rewards": np.std(rewards),
+                "elapsed": elapsed,
+                "total_time": cum_time,
+                "epoch": epoch,
+                "algo": algo,
+                "unit_multiplier": unit_multiplier,
+              }]
+            print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
+            rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
 
-    df = pd.DataFrame.from_dict(rew_track)
+    df = pd.DataFrame(outputs)
     print(df)
-    df.to_csv("EIRL_times.csv")
+    df.to_csv("data/EIRL_times.csv")
 
     # expert_eirl_trainer = eirl.EIRL(
     #     observation_space=env.observation_space,
