@@ -25,14 +25,14 @@ def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
             action_space=env.action_space,
             demonstrations=expert_transitions,
             rng=rng,
-        ), {"n_epochs": 2}
+        ), {"n_epochs": 1}
 def bc_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return bc.BC(
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
             rng=rng,
-        ), {"n_epochs": 2}
+        ), {"n_epochs": 1}
 
 def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     reward_net = BasicRewardNet(
@@ -49,7 +49,7 @@ def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         gen_algo=learner,
         reward_net=reward_net,
         allow_variable_horizon=True,
-    ), {"total_timesteps": 20_000}
+    ), {"total_timesteps": 40_000}
 
 algos = {
     "GAIL": gail_constructor,
