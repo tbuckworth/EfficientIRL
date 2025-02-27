@@ -83,16 +83,16 @@ def sqil_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     ), {"total_timesteps": 40_000}
 
 algos = {
-    "GAIL": gail_constructor,
+    "SQIL": sqil_constructor,
     "AIRL": airl_constructor,
+    "GAIL": gail_constructor,
     "EIRL": eirl_constructor,
     "BC": bc_constructor,
-    "SQIL": sqil_constructor,
 }
 
 
-def main(csv_file="data/EIRL_times.csv", output_file="data/times.png"):
-    epochs = 20
+def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
+    epochs = 2
     # env = gym.make("CartPole-v1")
     # expert = PPO(
     #     policy=MlpPolicy,
