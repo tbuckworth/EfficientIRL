@@ -15,16 +15,18 @@ from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.rewards.reward_nets import BasicRewardNet
 from imitation.util.networks import RunningNorm
+from imitation.policies.serialize import load_policy
+from imitation.util.util import make_vec_env
 
 
-def eirl_constructor(env, expert_transitions, rng, expert):
+def eirl_constructor(env, expert_transitions, expert_rollouts, rng, expert):
     return eirl.EIRL(
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
             rng=rng,
         ), {"n_epochs": 1}
-def bc_constructor(env, expert_transitions, rng, expert):
+def bc_constructor(env, expert_transitions, expert_rollouts, rng, expert):
     return bc.BC(
             observation_space=env.observation_space,
             action_space=env.action_space,
@@ -32,14 +34,14 @@ def bc_constructor(env, expert_transitions, rng, expert):
             rng=rng,
         ), {"n_epochs": 1}
 
-def gail_constructor(env, expert_transitions, rng, expert):
+def gail_constructor(env, expert_transitions, expert_rollouts, rng, expert):
     reward_net = BasicRewardNet(
         observation_space=env.observation_space,
         action_space=env.action_space,
         normalize_input_layer=RunningNorm,
     )
     return gail.GAIL(
-        demonstrations=expert_transitions,
+        demonstrations=expert_rollouts,
         demo_batch_size=1024,
         gen_replay_buffer_capacity=512,
         n_disc_updates_per_round=8,
@@ -56,25 +58,48 @@ algos = {
 
 def main():
     epochs = 20
-    env = gym.make("CartPole-v1")
-    expert = PPO(
-        policy=MlpPolicy,
-        env=env,
-        seed=0,
-        batch_size=64,
-        ent_coef=0.0,
-        learning_rate=0.0003,
-        n_epochs=10,
-        n_steps=64,
+    # env = gym.make("CartPole-v1")
+    # expert = PPO(
+    #     policy=MlpPolicy,
+    #     env=env,
+    #     seed=0,
+    #     batch_size=64,
+    #     ent_coef=0.0,
+    #     learning_rate=0.0003,
+    #     n_epochs=10,
+    #     n_steps=64,
+    # )
+    # expert.learn(10_000)  # set to 100_000 for better performance
+
+    SEED = 42
+
+    env = make_vec_env(
+        "seals:seals/CartPole-v0",
+        rng=np.random.default_rng(SEED),
+        n_envs=8,
+        post_wrappers=[
+            lambda env, _: RolloutInfoWrapper(env)
+        ],  # needed for computing rollouts later
     )
-    expert.learn(10_000)  # set to 100_000 for better performance
+    expert = load_policy(
+        "ppo-huggingface",
+        organization="HumanCompatibleAI",
+        env_name="seals/CartPole-v0",
+        venv=env,
+    )
 
     rng = np.random.default_rng()
+    # expert_rollouts = rollout.rollout(
+    #     expert,
+    #     DummyVecEnv([lambda: RolloutInfoWrapper(env)]),
+    #     rollout.make_sample_until(min_timesteps=None, min_episodes=50),
+    #     rng=rng,
+    # )
     expert_rollouts = rollout.rollout(
         expert,
-        DummyVecEnv([lambda: RolloutInfoWrapper(env)]),
-        rollout.make_sample_until(min_timesteps=None, min_episodes=50),
-        rng=rng,
+        env,
+        rollout.make_sample_until(min_timesteps=None, min_episodes=60),
+        rng=np.random.default_rng(SEED),
     )
     expert_transitions = rollout.flatten_trajectories(expert_rollouts)
     rew_track = {}
@@ -85,7 +110,7 @@ def main():
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
     outputs = []
     for algo in algos.keys():
-        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, rng, expert)
+        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng, expert)
         cum_time = 0
         for epoch in range(1, epochs+1):
             start = time.time()
