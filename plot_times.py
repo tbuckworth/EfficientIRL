@@ -1,11 +1,14 @@
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-def plot(csv_file="data/EIRL_times.csv", output_file="data/times.png"):
+def plot(csv_file="data/EIRL_times2.csv", output_file="data/times.png"):
     # Load data
     df = pd.read_csv(csv_file)
 
     df = df.rename(columns={"mean_reards": "mean_rewards"})
 
+    max_time = df.total_time.max()
+    # TODO: add the final value of each algo to the end.
     # Create the plot
     plt.figure(figsize=(10, 6))
 

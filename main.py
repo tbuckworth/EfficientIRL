@@ -181,7 +181,7 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
             }]
             print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
             # rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
-            if np.mean(rewards)>=np.mean(expert_rewards):
+            if epoch > 5 and np.mean(rewards)>=np.mean(expert_rewards):
                 break
 
     df = pd.DataFrame(outputs)
