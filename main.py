@@ -89,7 +89,7 @@ def main():
         cum_time = 0
         for epoch in range(1, epochs+1):
             start = time.time()
-            expert_trainer.train(epoch*unit_multiplier)
+            expert_trainer.train(unit_multiplier)
             elapsed = time.time() - start
             cum_time += elapsed
             rewards, _ = evaluate_policy(
@@ -105,7 +105,7 @@ def main():
                 "unit_multiplier": unit_multiplier,
               }]
             print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
-            rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
+            # rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
 
     df = pd.DataFrame(outputs)
     print(df)
