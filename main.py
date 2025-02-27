@@ -19,22 +19,22 @@ from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 
 
-def eirl_constructor(env, expert_transitions, expert_rollouts, rng, expert):
+def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return eirl.EIRL(
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
             rng=rng,
-        ), {"n_epochs": 1}
-def bc_constructor(env, expert_transitions, expert_rollouts, rng, expert):
+        ), {"n_epochs": 2}
+def bc_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return bc.BC(
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
             rng=rng,
-        ), {"n_epochs": 1}
+        ), {"n_epochs": 2}
 
-def gail_constructor(env, expert_transitions, expert_rollouts, rng, expert):
+def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     reward_net = BasicRewardNet(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -46,14 +46,14 @@ def gail_constructor(env, expert_transitions, expert_rollouts, rng, expert):
         gen_replay_buffer_capacity=512,
         n_disc_updates_per_round=8,
         venv=env,
-        gen_algo=expert,
+        gen_algo=learner,
         reward_net=reward_net,
-    ), {"total_timesteps": 1_000}
+    ), {"total_timesteps": 20_000}
 
 algos = {
+    "GAIL": gail_constructor,
     "EIRL": eirl_constructor,
     "BC": bc_constructor,
-    "GAIL": gail_constructor,
 }
 
 def main():
@@ -87,7 +87,16 @@ def main():
         env_name="seals/CartPole-v0",
         venv=env,
     )
-
+    learner = PPO(
+        env=env,
+        policy=MlpPolicy,
+        batch_size=64,
+        ent_coef=0.0,
+        learning_rate=0.0004,
+        gamma=0.95,
+        n_epochs=5,
+        seed=SEED,
+    )
     rng = np.random.default_rng()
     # expert_rollouts = rollout.rollout(
     #     expert,
@@ -110,7 +119,7 @@ def main():
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
     outputs = []
     for algo in algos.keys():
-        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng, expert)
+        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng, learner)
         cum_time = 0
         for epoch in range(1, epochs+1):
             start = time.time()
