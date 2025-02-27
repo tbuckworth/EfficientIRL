@@ -78,8 +78,6 @@ def sqil_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         venv=env,
         demonstrations=expert_transitions,
         policy="MlpPolicy",
-        rl_algo_class=sac.SAC,
-        rl_kwargs=dict(seed=SEED),
     ), {"total_timesteps": 40_000}
 
 algos = {
