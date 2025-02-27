@@ -48,6 +48,7 @@ def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         venv=env,
         gen_algo=learner,
         reward_net=reward_net,
+        allow_variable_horizon=True,
     ), {"total_timesteps": 20_000}
 
 algos = {
