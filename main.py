@@ -1,8 +1,9 @@
 import time
 
 import pandas as pd
-from imitation.algorithms import bc
-from imitation.algorithms.adversarial import gail
+from imitation.algorithms import bc, sqil
+from imitation.algorithms.adversarial import gail, airl
+from stable_baselines3.sac import sac
 
 import eirl
 import gymnasium as gym
@@ -13,26 +14,31 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3.common.evaluation import evaluate_policy
-from imitation.rewards.reward_nets import BasicRewardNet
+from imitation.rewards.reward_nets import BasicRewardNet, BasicShapedRewardNet
 from imitation.util.networks import RunningNorm
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 
+from plot_times import plot
+SEED = 42
 
 def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return eirl.EIRL(
-            observation_space=env.observation_space,
-            action_space=env.action_space,
-            demonstrations=expert_transitions,
-            rng=rng,
-        ), {"n_epochs": 1}
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=expert_transitions,
+        rng=rng,
+    ), {"n_epochs": 1}
+
+
 def bc_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return bc.BC(
-            observation_space=env.observation_space,
-            action_space=env.action_space,
-            demonstrations=expert_transitions,
-            rng=rng,
-        ), {"n_epochs": 1}
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=expert_transitions,
+        rng=rng,
+    ), {"n_epochs": 1}
+
 
 def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     reward_net = BasicRewardNet(
@@ -51,13 +57,41 @@ def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         allow_variable_horizon=True,
     ), {"total_timesteps": 40_000}
 
+def airl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+    reward_net = BasicShapedRewardNet(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        normalize_input_layer=RunningNorm,
+    )
+    return airl.AIRL(
+        demonstrations=expert_rollouts,
+        demo_batch_size=2048,
+        gen_replay_buffer_capacity=512,
+        n_disc_updates_per_round=16,
+        venv=env,
+        gen_algo=learner,
+        reward_net=reward_net,
+    ), {"total_timesteps": 40_000}
+
+def sqil_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+    return sqil.SQIL(
+        venv=env,
+        demonstrations=expert_transitions,
+        policy="MlpPolicy",
+        rl_algo_class=sac.SAC,
+        rl_kwargs=dict(seed=SEED),
+    ), {"total_timesteps": 40_000}
+
 algos = {
     "GAIL": gail_constructor,
+    "AIRL": airl_constructor,
     "EIRL": eirl_constructor,
     "BC": bc_constructor,
+    "SQIL": sqil_constructor,
 }
 
-def main():
+
+def main(csv_file="data/EIRL_times.csv", output_file="data/times.png"):
     epochs = 20
     # env = gym.make("CartPole-v1")
     # expert = PPO(
@@ -72,7 +106,6 @@ def main():
     # )
     # expert.learn(10_000)  # set to 100_000 for better performance
 
-    SEED = 42
 
     env = make_vec_env(
         "seals:seals/CartPole-v0",
@@ -122,7 +155,7 @@ def main():
     for algo in algos.keys():
         expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng, learner)
         cum_time = 0
-        for epoch in range(1, epochs+1):
+        for epoch in range(1, epochs + 1):
             start = time.time()
             expert_trainer.train(**unit_multiplier)
             elapsed = time.time() - start
@@ -131,21 +164,22 @@ def main():
                 expert_trainer.policy, env, 10, return_episode_rewards=True
             )
             outputs += [{
-                "mean_reards": np.mean(rewards),
+                "mean_rewards": np.mean(rewards),
                 "std_rewards": np.std(rewards),
+                "std_error": np.std(rewards) / np.sqrt(len(rewards)),
                 "elapsed": elapsed,
                 "total_time": cum_time,
                 "epoch": epoch,
                 "algo": algo,
                 "unit_multiplier": unit_multiplier,
-              }]
+            }]
             print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
             # rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
 
     df = pd.DataFrame(outputs)
     print(df)
-    df.to_csv("data/EIRL_times.csv")
-
+    df.to_csv(csv_file)
+    plot(csv_file, output_file)
     # expert_eirl_trainer = eirl.EIRL(
     #     observation_space=env.observation_space,
     #     action_space=env.action_space,
