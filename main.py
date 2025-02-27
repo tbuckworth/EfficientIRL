@@ -22,6 +22,13 @@ from imitation.util.util import make_vec_env
 from plot_times import plot
 SEED = 42
 
+# Name ID Base
+# Ant seals/Ant-v0 Ant-v3
+# Half Cheetah seals/HalfCheetah-v0 HalfCheetah-v3
+# Hopper seals/Hopper-v0 Hopper-v3
+# Swimmer seals/Swimmer-v0 Swimmer-v3
+# Walker seals/Walker2d-v0 Walker2d-v3
+
 def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     return eirl.EIRL(
         observation_space=env.observation_space,
@@ -71,6 +78,7 @@ def airl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         venv=env,
         gen_algo=learner,
         reward_net=reward_net,
+        allow_variable_horizon=True,
     ), {"total_timesteps": 40_000}
 
 def sqil_constructor(env, expert_transitions, expert_rollouts, rng, learner):
