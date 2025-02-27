@@ -104,7 +104,7 @@ def main():
     expert_transitions = rollout.flatten_trajectories(expert_rollouts)
     rew_track = {}
     expert_rewards, _ = evaluate_policy(
-        expert.policy, env, 10, return_episode_rewards=True
+        expert, env, 10, return_episode_rewards=True
     )
     print(f"Expert Rewards: {np.mean(expert_rewards)}")
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
