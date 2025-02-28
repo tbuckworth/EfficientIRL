@@ -1,3 +1,5 @@
+import argparse
+import os.path
 import time
 
 import pandas as pd
@@ -130,7 +132,11 @@ algos = {
 }
 
 
-def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png", load_expert=True):
+def main(algo_list, filename="EIRL_times2", load_expert=True):
+    if algo_list == ["ALL"]:
+        algo_list = algos.keys()
+    csv_file = f"data/{filename}.csv"
+    output_file = f"data/{filename}.png"
     epochs = 50
     # env = gym.make("CartPole-v1")
 
@@ -193,8 +199,8 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png", load_ex
     }]
     print(f"Expert Rewards: {np.mean(expert_rewards)}")
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
-    for algo in algos.keys():
-        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng)
+    for algo in algo_list:
+        expert_trainer, unit_multiplier = algo_list[algo](env, expert_transitions, expert_rollouts, rng)
         cum_time = 0
         for epoch in range(1, epochs + 1):
             start = time.time()
@@ -233,7 +239,10 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png", load_ex
         pass
     df = pd.DataFrame(outputs)
     print(df)
-    df.to_csv(csv_file)
+    if not os.path.exists(csv_file):
+        df.to_csv(csv_file)
+    else:
+        df.to_csv(csv_file, mode='a', header=False, index=False)
     plot(csv_file, output_file)
     # expert_eirl_trainer = eirl.EIRL(
     #     observation_space=env.observation_space,
@@ -269,4 +278,9 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png", load_ex
 
 
 if __name__ == '__main__':
-    main(csv_file="data/EIRL_times_sub_optimal.csv", output_file="data/times_sub_optimal.png", load_expert=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--algo_list', type=str, nargs='+', default=['EIRL'])
+    parser.add_argument('--filename', type=str, default='EIRL_times_default')
+    parser.add_argument('--load_expert', action="store_true", default=False)
+
+    main(**vars(parser.parse_args()))
