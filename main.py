@@ -1,7 +1,7 @@
 import time
 
 import pandas as pd
-from imitation.algorithms import bc, sqil
+from imitation.algorithms import bc, sqil, dagger
 from imitation.algorithms.adversarial import gail, airl
 from stable_baselines3.sac import sac
 
@@ -106,7 +106,19 @@ def sqil_constructor(env, expert_transitions, expert_rollouts, rng):
         venv=env,
         demonstrations=expert_transitions,
         policy="MlpPolicy",
-    ), {"total_timesteps": 40_000}
+    ), {"total_timesteps": 100_000}
+
+def dagger_constructor(env, expert_transitions, expert_rollouts, rng):
+    raise NotImplementedError
+    # return dagger.SimpleDAggerTrainer(
+    #     venv=env,
+    #     scratch_dir=tmpdir,
+    #     expert_policy=expert,
+    #     bc_trainer=bc_trainer,
+    #     rng=np.random.default_rng(),
+    # )
+
+    # dagger_trainer.train(2000)
 
 algos = {
     "SQIL": sqil_constructor,
@@ -114,24 +126,13 @@ algos = {
     "GAIL": gail_constructor,
     "EIRL": eirl_constructor,
     "BC": bc_constructor,
+    # "DAgger": dagger_constructor,
 }
 
 
-def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
+def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png", load_expert=True):
     epochs = 50
     # env = gym.make("CartPole-v1")
-    # expert = PPO(
-    #     policy=MlpPolicy,
-    #     env=env,
-    #     seed=0,
-    #     batch_size=64,
-    #     ent_coef=0.0,
-    #     learning_rate=0.0003,
-    #     n_epochs=10,
-    #     n_steps=64,
-    # )
-    # expert.learn(10_000)  # set to 100_000 for better performance
-
 
     env = make_vec_env(
         "seals:seals/CartPole-v0",
@@ -141,12 +142,26 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
     )
-    expert = load_policy(
-        "ppo-huggingface",
-        organization="HumanCompatibleAI",
-        env_name="seals/CartPole-v0",
-        venv=env,
-    )
+    if load_expert:
+        expert = load_policy(
+            "ppo-huggingface",
+            organization="HumanCompatibleAI",
+            env_name="seals/CartPole-v0",
+            venv=env,
+        )
+    else:
+        agent = PPO(
+            policy=MlpPolicy,
+            env=env,
+            seed=0,
+            batch_size=64,
+            ent_coef=0.0,
+            learning_rate=0.0003,
+            n_epochs=10,
+            n_steps=64,
+        )
+        agent.learn(10_000)  # set to 100_000 for better performance
+        expert = agent.policy
 
     rng = np.random.default_rng()
     # expert_rollouts = rollout.rollout(
@@ -166,9 +181,18 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
     expert_rewards, _ = evaluate_policy(
         expert, env, 10, return_episode_rewards=True
     )
+    outputs = [{
+        "mean_rewards": np.mean(expert_rewards),
+        "std_rewards": np.std(expert_rewards),
+        "std_error": np.std(expert_rewards) / np.sqrt(len(expert_rewards)),
+        "elapsed": None,
+        "total_time": 0,
+        "epoch": None,
+        "algo": "Expert",
+        "unit_multiplier": None,
+    }]
     print(f"Expert Rewards: {np.mean(expert_rewards)}")
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
-    outputs = []
     for algo in algos.keys():
         expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng)
         cum_time = 0
@@ -194,7 +218,19 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
             # rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
             if epoch > 5 and np.mean(rewards)>=np.mean(expert_rewards):
                 break
-
+    try:
+        outputs += [{
+            "mean_rewards": np.mean(expert_rewards),
+            "std_rewards": np.std(expert_rewards),
+            "std_error": np.std(expert_rewards) / np.sqrt(len(expert_rewards)),
+            "elapsed": None,
+            "total_time": max([l["total_time"] for l in outputs]),
+            "epoch": None,
+            "algo": "Expert",
+            "unit_multiplier": None,
+        }]
+    except Exception as e:
+        pass
     df = pd.DataFrame(outputs)
     print(df)
     df.to_csv(csv_file)
@@ -233,4 +269,4 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
 
 
 if __name__ == '__main__':
-    main()
+    main(csv_file="data/EIRL_times_sub_optimal.csv", output_file="data/times_sub_optimal.png", load_expert=False)
