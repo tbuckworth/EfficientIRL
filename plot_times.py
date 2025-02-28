@@ -33,4 +33,4 @@ def plot(csv_file="data/EIRL_times2.csv", output_file="data/times.png"):
     plt.show()
 
 if __name__ == "__main__":
-    plot()
+    plot("data/EIRL_timing_suboptimal.csv")

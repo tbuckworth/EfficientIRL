@@ -167,7 +167,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
             n_epochs=10,
             n_steps=64,
         )
-        agent.learn(10_000)  # set to 100_000 for better performance
+        agent.learn(50_000)  # set to 100_000 for better performance
         expert = agent.policy
 
     rng = np.random.default_rng()
