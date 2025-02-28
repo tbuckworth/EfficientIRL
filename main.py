@@ -29,7 +29,7 @@ SEED = 42
 # Swimmer seals/Swimmer-v0 Swimmer-v3
 # Walker seals/Walker2d-v0 Walker2d-v3
 
-def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+def eirl_constructor(env, expert_transitions, expert_rollouts, rng):
     return eirl.EIRL(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -38,7 +38,7 @@ def eirl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     ), {"n_epochs": 1}
 
 
-def bc_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+def bc_constructor(env, expert_transitions, expert_rollouts, rng):
     return bc.BC(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -47,7 +47,17 @@ def bc_constructor(env, expert_transitions, expert_rollouts, rng, learner):
     ), {"n_epochs": 1}
 
 
-def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+def gail_constructor(env, expert_transitions, expert_rollouts, rng):
+    learner = PPO(
+        env=env,
+        policy=MlpPolicy,
+        batch_size=64,
+        ent_coef=0.0,
+        learning_rate=0.0004,
+        gamma=0.95,
+        n_epochs=5,
+        seed=SEED,
+    )
     reward_net = BasicRewardNet(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -64,7 +74,17 @@ def gail_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         allow_variable_horizon=True,
     ), {"total_timesteps": 40_000}
 
-def airl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+def airl_constructor(env, expert_transitions, expert_rollouts, rng):
+    learner = PPO(
+        env=env,
+        policy=MlpPolicy,
+        batch_size=64,
+        ent_coef=0.0,
+        learning_rate=0.0004,
+        gamma=0.95,
+        n_epochs=5,
+        seed=SEED,
+    )
     reward_net = BasicShapedRewardNet(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -81,7 +101,7 @@ def airl_constructor(env, expert_transitions, expert_rollouts, rng, learner):
         allow_variable_horizon=True,
     ), {"total_timesteps": 40_000}
 
-def sqil_constructor(env, expert_transitions, expert_rollouts, rng, learner):
+def sqil_constructor(env, expert_transitions, expert_rollouts, rng):
     return sqil.SQIL(
         venv=env,
         demonstrations=expert_transitions,
@@ -127,16 +147,7 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
         env_name="seals/CartPole-v0",
         venv=env,
     )
-    learner = PPO(
-        env=env,
-        policy=MlpPolicy,
-        batch_size=64,
-        ent_coef=0.0,
-        learning_rate=0.0004,
-        gamma=0.95,
-        n_epochs=5,
-        seed=SEED,
-    )
+
     rng = np.random.default_rng()
     # expert_rollouts = rollout.rollout(
     #     expert,
@@ -159,7 +170,7 @@ def main(csv_file="data/EIRL_times2.csv", output_file="data/times2.png"):
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
     outputs = []
     for algo in algos.keys():
-        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng, learner)
+        expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng)
         cum_time = 0
         for epoch in range(1, epochs + 1):
             start = time.time()
