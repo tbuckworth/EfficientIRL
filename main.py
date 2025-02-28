@@ -148,6 +148,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
     )
+    threshold = 500
     if load_expert:
         expert = load_policy(
             "ppo-huggingface",
@@ -222,7 +223,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
             }]
             print(f"{algo} Rewards: {np.mean(rewards):.2f}\t elapsed:{elapsed:.2f}")
             # rew_track[algo] = {"rewards": np.mean(rewards), "elapsed": elapsed}
-            if epoch > 5 and np.mean(rewards)>=np.mean(expert_rewards):
+            if epoch > 5 and np.mean(rewards)>=threshold:
                 break
     try:
         outputs += [{
