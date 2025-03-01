@@ -101,7 +101,30 @@ def alternative_loss(policy, obs, actions):
     q = policy.action_net(latent_pi)
     distribution = policy._get_action_dist_from_latent(latent_pi)
 
+def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Any, Any]:
+    """
+    Evaluate actions according to the current policy,
+    given the observations.
 
+    :param obs: Observation
+    :param actions: Actions
+    :return: estimated value, log likelihood of taking those actions
+        and entropy of the action distribution.
+    """
+    # Preprocess the observation if needed
+    features = self.extract_features(obs)
+    if self.share_features_extractor:
+        latent_pi, latent_vf = self.mlp_extractor(features)
+    else:
+        pi_features, vf_features = features
+        latent_pi = self.mlp_extractor.forward_actor(pi_features)
+        latent_vf = self.mlp_extractor.forward_critic(vf_features)
+    distribution = self._get_action_dist_from_latent(latent_pi)
+    log_prob = distribution.log_prob(actions)
+    values = self.value_net(latent_vf)
+    entropy = distribution.entropy()
+    pred_actions = distribution.distribution.loc
+    return values, log_prob, entropy, pred_actions
 
 @dataclasses.dataclass(frozen=True)
 class EfficientIRLLossCalculator:
@@ -153,6 +176,7 @@ class EfficientIRLLossCalculator:
         #     tensor_obs,  # type: ignore[arg-type]
         #     acts,
         # )
+        _, log_prob, entropy, q = evaluate_actions(policy, obs, acts)
         q = get_latents(policy, obs)
         next_q = policy.predict_values(nobs).squeeze()
 
