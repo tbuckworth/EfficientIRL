@@ -30,7 +30,9 @@ from imitation.data import rollout, types
 from imitation.policies import base as policy_base
 from imitation.util import logger as imit_logger
 from imitation.util import util
+from stable_baselines3.common.distributions import CategoricalDistribution, DiagGaussianDistribution
 from stable_baselines3.common.policies import BasePolicy
+from torch import Tensor
 
 
 @dataclasses.dataclass(frozen=True)
@@ -101,7 +103,7 @@ def alternative_loss(policy, obs, actions):
     q = policy.action_net(latent_pi)
     distribution = policy._get_action_dist_from_latent(latent_pi)
 
-def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Any, Any]:
+def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Tensor | None | Any]:
     """
     Evaluate actions according to the current policy,
     given the observations.
@@ -122,9 +124,17 @@ def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Any, Any]
     distribution = self._get_action_dist_from_latent(latent_pi)
     log_prob = distribution.log_prob(actions)
     values = self.value_net(latent_vf)
-    entropy = distribution.entropy()
-    pred_actions = distribution.distribution.loc
-    return values, log_prob, entropy, pred_actions
+    if isinstance(distribution, CategoricalDistribution):
+        entropy = np.log(distribution.action_dim)
+        # Slight duplication here, but no better obvious way:
+        # pred_actions = self.action_net(latent_pi)
+        # q_taken = pred_actions[th.arange(len(pred_actions)), actions.to(th.int64)]
+    elif isinstance(distribution, DiagGaussianDistribution):
+        entropy = distribution.entropy()
+        # q_taken = distribution.distribution.loc
+    else:
+        raise NotImplementedError("Distribution type not implemented.")
+    return values, log_prob, entropy
 
 @dataclasses.dataclass(frozen=True)
 class EfficientIRLLossCalculator:
@@ -176,19 +186,20 @@ class EfficientIRLLossCalculator:
         #     tensor_obs,  # type: ignore[arg-type]
         #     acts,
         # )
-        _, log_prob, entropy, q = evaluate_actions(policy, obs, acts)
-        q = get_latents(policy, obs)
-        next_q = policy.predict_values(nobs).squeeze()
+        _, log_prob, entropy = evaluate_actions(policy, obs, acts)
+        # q = get_latents(policy, obs)
+        next_lp = policy.predict_values(nobs).squeeze()
 
-        log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
-        log_prob_expert = log_probs[th.arange(len(q)), acts.to(th.int64)]  # pick log-p of expert's act
-        loss1 = -(log_prob_expert - self.max_ent).mean()
+        # log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
+        # log_prob_expert = log_probs[th.arange(len(q)), acts.to(th.int64)]  # pick log-p of expert's act
 
-        q_taken = q[th.arange(len(q)), acts.to(th.int64)]
-        loss2 = ((q_taken - next_q) * (1 - dones.float())).pow(2).mean()
+        loss1 = -(log_prob + entropy).mean()
+
+        # q_taken = q[th.arange(len(q)), acts.to(th.int64)]
+        loss2 = ((log_prob - next_lp) * (1 - dones.float())).pow(2).mean()
         loss = loss1 + loss2 * self.consistency_coef
 
-        prob_true_act = th.exp(log_prob_expert).mean()
+        prob_true_act = th.exp(log_prob).mean()
         # log_prob = log_prob.mean()
         # entropy = entropy.mean() if entropy is not None else None
 
