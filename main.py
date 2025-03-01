@@ -168,7 +168,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
             n_steps=64,
         )
         expert_rewards = [0]
-        while np.mean(expert_rewards)<200:
+        while np.mean(expert_rewards)<100:
             agent.learn(10_000)  # set to 100_000 for better performance
             expert = agent.policy
             expert_rewards, _ = evaluate_policy(
