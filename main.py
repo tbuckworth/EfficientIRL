@@ -175,6 +175,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
                 expert, env, 10, return_episode_rewards=True
             )
 
+
     rng = np.random.default_rng()
     # expert_rollouts = rollout.rollout(
     #     expert,
