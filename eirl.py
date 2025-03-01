@@ -95,6 +95,13 @@ def get_latents(policy, obs):
     latent_pi = policy.mlp_extractor.forward_actor(features)
     return policy.action_net(latent_pi)
 
+def alternative_loss(policy, obs, actions):
+    features = BasePolicy.extract_features(policy, obs, policy.pi_features_extractor)
+    latent_pi = policy.mlp_extractor.forward_actor(features)
+    q = policy.action_net(latent_pi)
+    distribution = policy._get_action_dist_from_latent(latent_pi)
+
+
 
 @dataclasses.dataclass(frozen=True)
 class EfficientIRLLossCalculator:
