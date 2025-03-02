@@ -56,9 +56,9 @@ class WandbInfoLogger(BaseCallback):
     def _on_step(self) -> bool:
         if "episode" in self.locals["infos"][0]:  # Ensure it's an episodic environment
             # Extract custom metric from the info dict
-            custom_metric = self.locals["infos"][0].get("custom_metric", None)  # Replace with actual key
+            custom_metric = self.locals["infos"][0].get("original_env_rew", None)  # Replace with actual key
             if custom_metric is not None:
-                wandb.log({"custom_metric": custom_metric}, step=self.num_timesteps)
+                wandb.log({"original_env_rew": custom_metric}, step=self.num_timesteps)
         return True  # Continue training
 
 
@@ -121,9 +121,9 @@ def main():
 
     learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy), logdir)
     # for i in range(20):
-    learner.learn(300_000)
+    learner.learn(1000_000, callback=WandbInfoLogger())
     mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
-    print(f"Timesteps:{300_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    print(f"Timesteps:{1000_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):
