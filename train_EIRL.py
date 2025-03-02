@@ -8,11 +8,10 @@ from imitation.data import rollout, wrappers
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.rewards import reward_wrapper
-from imitation.util.util import make_vec_env
 from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from CustomEnvMonitor import CustomEnvMonitor
+from CustomEnvMonitor import CustomEnvMonitor, make_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 try:
@@ -119,7 +118,7 @@ def main():
     )
 
     #TEST REMOVE!
-    wenv = CustomEnvMonitor(wrap_env_with_reward(env, expert_trainer.policy))
+    wenv = wrap_env_with_reward(env, expert_trainer.policy)
     learner = load_ant_learner(wenv, logdir)
     learner.learn(1000_000, callback=WandbInfoLogger())
 
@@ -130,7 +129,7 @@ def main():
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised",log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
-    wenv = CustomEnvMonitor(wrap_env_with_reward(env, expert_trainer.policy))
+    wenv = wrap_env_with_reward(env, expert_trainer.policy)
 
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
