@@ -15,6 +15,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 try:
     import wandb
     from private_login import wandb_login
+    wandb_login()
 except ImportError:
     pass
 
