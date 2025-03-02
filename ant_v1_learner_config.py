@@ -5,7 +5,7 @@ from imitation.policies.base import NormalizeFeaturesExtractor
 from stable_baselines3 import PPO
 
 
-def load_ant_learner(env):
+def load_ant_learner(env, logdir=None):
     antv1_params = OrderedDict([('batch_size', 16),
                                 ('clip_range', 0.3),
                                 ('ent_coef', 3.1441389214159857e-06),
@@ -50,7 +50,7 @@ def load_ant_learner(env):
         rollout_buffer_kwargs=None,
         target_kl=None,
         stats_window_size=100,
-        tensorboard_log=None,
+        tensorboard_log=logdir,
         policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
                                   'features_extractor_class': NormalizeFeaturesExtractor,
                                   'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
