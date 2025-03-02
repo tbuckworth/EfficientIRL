@@ -46,6 +46,22 @@ def wrap_env_with_reward(env, policy):
     )
     return venv_wrapped
 
+import wandb
+from stable_baselines3.common.callbacks import BaseCallback
+
+class WandbInfoLogger(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+
+    def _on_step(self) -> bool:
+        if "episode" in self.locals["infos"][0]:  # Ensure it's an episodic environment
+            # Extract custom metric from the info dict
+            custom_metric = self.locals["infos"][0].get("custom_metric", None)  # Replace with actual key
+            if custom_metric is not None:
+                wandb.log({"custom_metric": custom_metric}, step=self.num_timesteps)
+        return True  # Continue training
+
+
 def create_logdir(env_name, seed):
     logdir = os.path.join('logs', 'train', env_name)
     run_name = time.strftime("%Y-%m-%d__%H-%M-%S") + f'__seed_{seed}'
