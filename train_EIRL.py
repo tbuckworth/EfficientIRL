@@ -11,6 +11,9 @@ from imitation.rewards import reward_wrapper
 from imitation.util.util import make_vec_env
 from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
+
+from CustomEnvMonitor import CustomEnvMonitor
+
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 try:
     import wandb
@@ -56,9 +59,9 @@ class WandbInfoLogger(BaseCallback):
     def _on_step(self) -> bool:
         if "episode" in self.locals["infos"][0]:  # Ensure it's an episodic environment
             # Extract custom metric from the info dict
-            custom_metric = self.locals["infos"][0].get("original_env_rew", None)  # Replace with actual key
+            custom_metric = self.locals["infos"]["episode"].get("original_r", None)  # Replace with actual key
             if custom_metric is not None:
-                wandb.log({"original_env_rew": custom_metric}, step=self.num_timesteps)
+                wandb.log({"rollout/ep_orig_rew_mean": custom_metric}, step=self.num_timesteps)
         return True  # Continue training
 
 
@@ -114,12 +117,22 @@ def main():
         rng=default_rng,
         custom_logger=custom_logger,
     )
+
+    #TEST REMOVE!
+    wenv = CustomEnvMonitor(wrap_env_with_reward(env, expert_trainer.policy))
+    learner = load_ant_learner(wenv, logdir)
+    learner.learn(1000_000, callback=WandbInfoLogger())
+
+
+
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment,progress_bar=False)
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised",log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
-    learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy), logdir)
+    wenv = CustomEnvMonitor(wrap_env_with_reward(env, expert_trainer.policy))
+
+    learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
     learner.learn(1000_000, callback=WandbInfoLogger())
     mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
