@@ -11,7 +11,12 @@ from imitation.rewards import reward_wrapper
 from imitation.util.util import make_vec_env
 from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
-import wandb
+# os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+try:
+    import wandb
+    from private_login import wandb_login
+except ImportError:
+    pass
 
 import eirl
 from ant_v1_learner_config import load_ant_learner
