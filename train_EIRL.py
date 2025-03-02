@@ -58,9 +58,10 @@ class WandbInfoLogger(BaseCallback):
     def _on_step(self) -> bool:
         if "episode" in self.locals["infos"][0]:  # Ensure it's an episodic environment
             # Extract custom metric from the info dict
-            custom_metric = self.locals["infos"]["episode"].get("original_r", None)  # Replace with actual key
-            if custom_metric is not None:
-                wandb.log({"rollout/ep_orig_rew_mean": custom_metric}, step=self.num_timesteps)
+            infos = self.locals["infos"]
+            ep_orig_rew = [info["episode"]["original_r"] for info in infos if "episode" in info.keys()]
+            if ep_orig_rew != []:
+                wandb.log({"rollout/ep_orig_rew_mean": np.mean(ep_orig_rew)}, step=self.num_timesteps)
         return True  # Continue training
 
 
@@ -116,13 +117,6 @@ def main():
         rng=default_rng,
         custom_logger=custom_logger,
     )
-
-    #TEST REMOVE!
-    wenv = wrap_env_with_reward(env, expert_trainer.policy)
-    learner = load_ant_learner(wenv, logdir)
-    learner.learn(1000_000, callback=WandbInfoLogger())
-
-
 
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment,progress_bar=False)

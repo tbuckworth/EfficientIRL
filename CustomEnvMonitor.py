@@ -32,8 +32,10 @@ class CustomEnvMonitor(Monitor):
             ep_rew = sum(self.rewards)
             orig_ep_rew = sum(self.original_rewards)
             ep_len = len(self.rewards)
-            ep_info = {"r": round(ep_rew, 6), "l": ep_len, "t": round(time.time() - self.t_start, 6),
-                       "original_r": round(orig_ep_rew)}
+            ep_info = {"r": round(ep_rew, 6),
+                       "l": ep_len,
+                       "t": round(time.time() - self.t_start, 6),
+                       "original_r": orig_ep_rew}
             for key in self.info_keywords:
                 ep_info[key] = info[key]
             self.episode_returns.append(ep_rew)
