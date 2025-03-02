@@ -98,27 +98,32 @@ def main():
         rng=default_rng,
         custom_logger=custom_logger,
     )
-    learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy))
-    learner.learn(10_000)
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment,progress_bar=False)
-        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards)
+        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised",log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
     learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy))
     for i in range(20):
         learner.learn(10_000)
-        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards)
+        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
         print(f"Timesteps:{(i + 1) * 10_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
 
-def evaluate(env, expert_trainer, target_rewards):
+def evaluate(env, expert_trainer, target_rewards, phase, log=False):
     rewards, _ = evaluate_policy(
         expert_trainer.policy, env, 10, return_episode_rewards=True
     )
     mean_rew = np.mean(rewards)
     std_err = np.std(rewards) / np.sqrt(len(rewards))
     per_expert = mean_rew / target_rewards
+    if log:
+        wandb.log({
+            "Phase": phase,
+            "MeanRewards": mean_rew,
+            "StdErrs": std_err,
+            "Ratio": per_expert,
+        })
     return mean_rew, per_expert, std_err
 
 
