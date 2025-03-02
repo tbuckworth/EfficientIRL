@@ -47,7 +47,7 @@ class MyTestCase(unittest.TestCase):
             demonstrations=expert_transitions,
             rng=rng,
         )
-        expert_trainer.train(n_epochs=20)
+        expert_trainer.train(n_epochs=20,progress_bar=False)
         rewards, _ = evaluate_policy(
             expert_trainer.policy, env, 10, return_episode_rewards=True
         )

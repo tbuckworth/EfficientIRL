@@ -213,6 +213,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     rew_track["Expert"] = {"rewards": np.mean(expert_rewards), "elapsed": None}
     for algo in algo_list:
         expert_trainer, unit_multiplier = algos[algo](env, expert_transitions, expert_rollouts, rng)
+        unit_multiplier.update({"progress_bar":False})
         cum_time = 0
         for epoch in range(1, epochs + 1):
             start = time.time()

@@ -74,7 +74,7 @@ def main():
         rng=default_rng,
     )
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
-        expert_trainer.train(n_epochs=increment)
+        expert_trainer.train(n_epochs=increment,progress_bar=False)
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
