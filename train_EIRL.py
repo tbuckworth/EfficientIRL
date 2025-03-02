@@ -60,7 +60,7 @@ def main():
     wandb.init(project="EfficientIRL", sync_tensorboard=True)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     training_increments = 5
-    n_epochs = 20
+    n_epochs = 30
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         f"seals:{env_name}",
@@ -104,10 +104,10 @@ def main():
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
     learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy), logdir)
-    for i in range(20):
-        learner.learn(10_000)
-        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
-        print(f"Timesteps:{(i + 1) * 10_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    # for i in range(20):
+    learner.learn(300_000)
+    mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
+    print(f"Timesteps:{300_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):
