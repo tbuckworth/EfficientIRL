@@ -27,6 +27,7 @@ def wrap_env_with_reward(env, policy):
             nobs = torch.FloatTensor(next_state).to(device=policy.device)
         return policy.predict_values(nobs).squeeze().detach().cpu().numpy()
 
+
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
         venv_buffering,
