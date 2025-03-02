@@ -1,3 +1,6 @@
+import os
+import time
+
 import numpy as np
 import torch
 from huggingface_sb3 import load_from_hub
@@ -6,7 +9,9 @@ from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.rewards import reward_wrapper
 from imitation.util.util import make_vec_env
+from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
+import wandb
 
 import eirl
 from ant_v1_learner_config import load_ant_learner
@@ -35,23 +40,35 @@ def wrap_env_with_reward(env, policy):
     )
     return venv_wrapped
 
+def create_logdir(env_name, seed):
+    logdir = os.path.join('logs', 'train', env_name)
+    run_name = time.strftime("%Y-%m-%d__%H-%M-%S") + f'__seed_{seed}'
+    logdir = os.path.join(logdir, run_name)
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+    return logdir
 
 def main():
+    env_name = "seals/Ant-v1"
+    logdir = create_logdir(env_name, SEED)
+    wandb.init(project="EfficientIRL", sync_tensorboard=True)
+    custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     training_increments = 5
     n_epochs = 20
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
-        "seals:seals/Ant-v1",
+        f"seals:{env_name}",
         rng=default_rng,
         n_envs=8,
         post_wrappers=[
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
     )
+
     expert = load_policy(
         "ppo-huggingface",
         organization="HumanCompatibleAI",
-        env_name="seals/Ant-v1",
+        env_name=env_name,
         venv=env,
     )
     expert_rewards, _ = evaluate_policy(
@@ -73,6 +90,7 @@ def main():
         action_space=env.action_space,
         demonstrations=expert_transitions,
         rng=default_rng,
+        custom_logger=custom_logger,
     )
     learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy))
     learner.learn(10_000)
