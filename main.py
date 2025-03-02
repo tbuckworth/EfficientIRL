@@ -31,6 +31,11 @@ SEED = 42
 # Swimmer seals/Swimmer-v0 Swimmer-v3
 # Walker seals/Walker2d-v0 Walker2d-v3
 
+def read_ant():
+    with open("ant.out", "r") as file:
+        lines = file.readlines()
+        [l for l in lines if l[:6]=="Epoch:"]
+
 def eirl_constructor(env, expert_transitions, expert_rollouts, rng):
     return eirl.EIRL(
         observation_space=env.observation_space,
