@@ -103,7 +103,7 @@ def alternative_loss(policy, obs, actions):
     q = policy.action_net(latent_pi)
     distribution = policy._get_action_dist_from_latent(latent_pi)
 
-def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Tensor | None | Any]:
+def evaluate_actions(self, obs, actions: th.Tensor, ent_coef=1e-3) -> tuple[Any, Any, Tensor | None | Any]:
     """
     Evaluate actions according to the current policy,
     given the observations.
@@ -130,7 +130,7 @@ def evaluate_actions(self, obs, actions: th.Tensor) -> tuple[Any, Any, Tensor | 
         # pred_actions = self.action_net(latent_pi)
         # q_taken = pred_actions[th.arange(len(pred_actions)), actions.to(th.int64)]
     elif isinstance(distribution, DiagGaussianDistribution):
-        entropy = distribution.entropy()
+        entropy = distribution.entropy() * ent_coef
         # q_taken = distribution.distribution.loc
     else:
         raise NotImplementedError("Distribution type not implemented.")
@@ -143,7 +143,6 @@ class EfficientIRLLossCalculator:
     ent_weight: float
     l2_weight: float
     consistency_coef: float
-    max_ent: float
 
     def __call__(
             self,
@@ -434,8 +433,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             self.policy.parameters(),
             **optimizer_kwargs,
         )
-        max_ent = np.log(1/action_space.n)
-        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef, max_ent)
+        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
