@@ -25,7 +25,7 @@ def wrap_env_with_reward(env, policy):
         # this is for the reward function signature
         with torch.no_grad():
             nobs = torch.FloatTensor(next_state).to(device=policy.device)
-        return policy.predict_values(nobs).squeeze().cpu().numpy()
+        return policy.predict_values(nobs).squeeze().detach().cpu().numpy()
 
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
@@ -73,6 +73,8 @@ def main():
         demonstrations=expert_transitions,
         rng=default_rng,
     )
+    learner = load_ant_learner(wrap_env_with_reward(env, expert_trainer.policy))
+    learner.learn(10_000)
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment,progress_bar=False)
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards)
