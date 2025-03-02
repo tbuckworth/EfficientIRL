@@ -37,7 +37,7 @@ def wrap_env_with_reward(env, policy):
 
 def main():
     training_increments = 5
-    n_epochs = 1000
+    n_epochs = 20
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         "seals:seals/Ant-v1",
