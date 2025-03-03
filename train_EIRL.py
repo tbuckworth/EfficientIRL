@@ -69,13 +69,14 @@ def create_logdir(env_name, seed):
         os.makedirs(logdir)
     return logdir
 
-def main():
+def main(consistency_coef=100.):
+    ppo_timesteps = 0#1000_000
     env_name = "seals/Ant-v1"
     logdir = create_logdir(env_name, SEED)
     wandb.init(project="EfficientIRL", sync_tensorboard=True)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     training_increments = 5
-    n_epochs = 30
+    n_epochs = 100
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         f"seals:{env_name}",
@@ -112,6 +113,7 @@ def main():
         demonstrations=expert_transitions,
         rng=default_rng,
         custom_logger=custom_logger,
+        consistency_coef=consistency_coef,
     )
 
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
@@ -120,11 +122,12 @@ def main():
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
     wenv = wrap_env_with_reward(env, expert_trainer.policy)
+    # TODO: can i upload my agent somehow?
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
-    learner.learn(1000_000, callback=RewardLoggerCallback())
+    learner.learn(ppo_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
-    print(f"Timesteps:{1000_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    print(f"Timesteps:{ppo_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):
