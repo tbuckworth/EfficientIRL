@@ -143,10 +143,11 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     csv_file = f"data/{filename}.csv"
     output_file = f"data/{filename}.png"
     epochs = 50
+    env_name = "seals/CartPole-v0"
     # env = gym.make("CartPole-v1")
 
     env = make_vec_env(
-        "seals:seals/CartPole-v0",
+        f"seals:{env_name}",
         rng=np.random.default_rng(SEED),
         n_envs=8,
         post_wrappers=[
@@ -158,7 +159,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
         expert = load_policy(
             "ppo-huggingface",
             organization="HumanCompatibleAI",
-            env_name="seals/CartPole-v0",
+            env_name=env_name,
             venv=env,
         )
     else:

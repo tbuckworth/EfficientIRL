@@ -2,7 +2,8 @@ from collections import OrderedDict
 
 import torch
 from imitation.policies.base import NormalizeFeaturesExtractor
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
+from stable_baselines3.sac.policies import SACPolicy
 
 
 def load_ant_learner(env, logdir=None):
@@ -52,12 +53,48 @@ def load_ant_learner(env, logdir=None):
         stats_window_size=100,
         tensorboard_log=logdir,
         policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
-                                  'features_extractor_class': NormalizeFeaturesExtractor,
-                                  'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+                       'features_extractor_class': NormalizeFeaturesExtractor,
+                       'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
         verbose=0,
         seed=None,
         device="auto",
         _init_setup_model=True,
     )
+    # SAC
     learner = PPO(**ant_params)
     return learner
+
+
+def load_ant_sac_learner(env, logdir, policy):
+    params = dict(
+        policy="SACPolicy",
+        env=env,
+        learning_rate=3e-4,
+        buffer_size=1_000_000,  # 1e6
+        learning_starts=100,
+        batch_size=256,
+        tau=0.005,
+        gamma=0.99,
+        train_freq=1,
+        gradient_steps=1,
+        action_noise=None,
+        replay_buffer_class=None,
+        replay_buffer_kwargs=None,
+        optimize_memory_usage=False,
+        ent_coef="auto",
+        target_update_interval=1,
+        target_entropy="auto",
+        use_sde=False,
+        sde_sample_freq=-1,
+        use_sde_at_warmup=False,
+        stats_window_size=100,
+        tensorboard_log=None,
+        policy_kwargs=None,
+        verbose=0,
+        seed=None,
+        device="auto",
+        _init_setup_model=True,
+    )
+    learner = SAC(**params)
+    learner.policy.actor = policy.actor
+

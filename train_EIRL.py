@@ -126,8 +126,8 @@ def main(consistency_coef=100.):
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
     learner.learn(ppo_timesteps, callback=RewardLoggerCallback())
-    mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
-    print(f"Timesteps:{ppo_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
+    # print(f"Timesteps:{ppo_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):
