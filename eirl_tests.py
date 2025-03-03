@@ -4,11 +4,12 @@ import numpy as np
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
+from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 
 import eirl
-from CustomEnvMonitor import make_vec_env
 from ant_v1_learner_config import load_ant_learner
+from callbacks import RewardLoggerCallback
 from helper_local import import_wandb
 from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
 wandb = import_wandb()
@@ -72,7 +73,7 @@ class MyTestCase(unittest.TestCase):
         wenv = wrap_env_with_reward(self.env, expert_trainer.policy)
         learner = load_ant_learner(wenv, logdir)
         # for i in range(20):
-        learner.learn(10_000, callback=WandbInfoLogger())
+        learner.learn(10_000, callback=RewardLoggerCallback())
 
 if __name__ == '__main__':
     unittest.main()
