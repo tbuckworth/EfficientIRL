@@ -76,7 +76,7 @@ def main(consistency_coef=100.):
     wandb.init(project="EfficientIRL", sync_tensorboard=True)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     training_increments = 5
-    n_epochs = 100
+    n_epochs = 20
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         f"seals:{env_name}",
