@@ -34,10 +34,15 @@ def wrap_env_with_reward(env, policy):
             **kwargs,
     ) -> np.ndarray:
         # this is for the reward function signature
-        with torch.no_grad():
-            nobs = torch.FloatTensor(next_state).to(device=policy.device)
-            return policy.predict_values(nobs).squeeze().detach().cpu().numpy()
 
+        with torch.no_grad():
+            obs = torch.FloatTensor(state).to(device=policy.device)
+            acts = torch.FloatTensor(action).to(device=policy.device)
+            nobs = torch.FloatTensor(next_state).to(device=policy.device)
+            _, log_prob, entropy = eirl.evaluate_actions(policy, obs, acts)
+            rew = policy.predict_values(nobs).squeeze().detach().cpu().numpy()
+            rew[done] = log_prob[done]
+            return rew
 
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
