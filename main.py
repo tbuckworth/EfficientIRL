@@ -144,6 +144,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     output_file = f"data/{filename}.png"
     epochs = 50
     env_name = "seals/CartPole-v0"
+    env_name = "seals/Ant-V1"
     # env = gym.make("CartPole-v1")
 
     env = make_vec_env(
@@ -295,6 +296,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--algo_list', type=str, nargs='+', default=['EIRL'])
     parser.add_argument('--filename', type=str, default='EIRL_times_default')
+
     parser.add_argument('--load_expert', action="store_true", default=False)
 
     main(**vars(parser.parse_args()))
