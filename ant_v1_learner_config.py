@@ -112,3 +112,4 @@ def load_ant_sac_learner(env, logdir, policy):
     )
     learner = SAC(**params)
     learner.policy.actor = policy.actor
+    return learner

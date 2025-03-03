@@ -145,7 +145,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     output_file = f"data/{filename}.png"
     epochs = 50
     env_name = "seals/CartPole-v0"
-    env_name = "seals/Ant-V1"
+    env_name = "seals/Ant-v1"
     # env = gym.make("CartPole-v1")
 
     env = make_vec_env(
