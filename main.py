@@ -41,6 +41,7 @@ def eirl_constructor(env, expert_transitions, expert_rollouts, rng):
         observation_space=env.observation_space,
         action_space=env.action_space,
         demonstrations=expert_transitions,
+        consistency_coef=100.,
         rng=rng,
     ), {"n_epochs": 1}
 
