@@ -41,7 +41,7 @@ def wrap_env_with_reward(env, policy):
             nobs = torch.FloatTensor(next_state).to(device=policy.device)
             _, log_prob, entropy = eirl.evaluate_actions(policy, obs, acts)
             rew = policy.predict_values(nobs).squeeze().detach().cpu().numpy()
-            rew[done] = log_prob[done]
+            rew[done] = log_prob.detach().cpu().numpy()[done]
             return rew
 
     venv_buffering = wrappers.BufferingWrapper(env)
