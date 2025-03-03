@@ -298,6 +298,6 @@ if __name__ == '__main__':
     parser.add_argument('--algo_list', type=str, nargs='+', default=['EIRL'])
     parser.add_argument('--filename', type=str, default='EIRL_times_default')
 
-    parser.add_argument('--load_expert', action="store_true", default=False)
+    parser.add_argument('--load_expert', action="store_true", default=True)
 
     main(**vars(parser.parse_args()))
