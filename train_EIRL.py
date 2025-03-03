@@ -36,7 +36,7 @@ def wrap_env_with_reward(env, policy):
         # this is for the reward function signature
         with torch.no_grad():
             nobs = torch.FloatTensor(next_state).to(device=policy.device)
-        return policy.predict_values(nobs).squeeze().detach().cpu().numpy()
+            return policy.predict_values(nobs).squeeze().detach().cpu().numpy()
 
 
     venv_buffering = wrappers.BufferingWrapper(env)
