@@ -121,7 +121,7 @@ def main():
     wenv = wrap_env_with_reward(env, expert_trainer.policy)
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
-    learner.learn(1000_000, callback=WandbInfoLogger())
+    learner.learn(1000_000)#, callback=WandbInfoLogger())
     mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
     print(f"Timesteps:{1000_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
