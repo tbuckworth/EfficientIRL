@@ -3,7 +3,6 @@ import time
 
 import numpy as np
 import torch
-from huggingface_sb3 import load_from_hub
 from imitation.data import rollout, wrappers
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
@@ -11,15 +10,11 @@ from imitation.rewards import reward_wrapper
 from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from CustomEnvMonitor import CustomEnvMonitor, make_vec_env
+from CustomEnvMonitor import make_vec_env
+from helper_local import import_wandb
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-try:
-    import wandb
-    from private_login import wandb_login
-    wandb_login()
-except ImportError:
-    pass
+wandb = import_wandb()
 
 import eirl
 from ant_v1_learner_config import load_ant_learner
@@ -124,7 +119,6 @@ def main():
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
     wenv = wrap_env_with_reward(env, expert_trainer.policy)
-
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
     learner.learn(1000_000, callback=WandbInfoLogger())
