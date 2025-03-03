@@ -53,3 +53,76 @@ class CustomVecEpisodeStatsCallback(BaseCallback):
 #
 # callback = CustomVecEpisodeStatsCallback(verbose=1)
 # model.learn(total_timesteps=10000, callback=callback)
+
+import numpy as np
+from collections import deque
+from stable_baselines3.common.callbacks import BaseCallback
+import wandb
+
+class RewardLoggerCallback(BaseCallback):
+    def __init__(self, verbose=0, reward_window=100):
+        super().__init__(verbose)
+        self.reward_window = reward_window  # number of episodes to average over
+        # Buffers for computing running mean of episode returns
+        self.original_ep_returns = deque(maxlen=reward_window)
+        self.learned_ep_returns = deque(maxlen=reward_window)
+        # Per-env accumulators for current episode
+        self._orig_sum = None
+        self._learned_sum = None
+
+    def _on_training_start(self) -> None:
+        """Initialize per-environment reward accumulators."""
+        num_envs = self.training_env.num_envs  # number of parallel envs
+        self._orig_sum = np.zeros(num_envs)
+        self._learned_sum = np.zeros(num_envs)
+
+    def _on_step(self) -> bool:
+        # infos, rewards, and dones for each parallel env at this step
+        infos = self.locals.get("infos")
+        rewards = self.locals.get("rewards")
+        dones = self.locals.get("dones")
+        # Update reward sums for each env
+        for i, info in enumerate(infos):
+            # Add current step rewards to accumulators
+            # Original reward is stored by RewardVecEnvWrapper in info:
+            orig_rew = info.get("original_env_rew", 0.0)
+            self._orig_sum[i] += float(orig_rew)
+            # Learned reward is the reward seen by the agent (from env.step):
+            self._learned_sum[i] += float(rewards[i])
+            # Check if this env finished an episode at this step
+            if dones[i]:
+                # Episode done: record returns and reset accumulators
+                ep_orig_return = self._orig_sum[i]
+                ep_learned_return = self._learned_sum[i]
+                self.original_ep_returns.append(ep_orig_return)
+                self.learned_ep_returns.append(ep_learned_return)
+                if self.verbose:
+                    print(f"[Episode End] Env {i}: Original Return={ep_orig_return:.2f}, Learned Return={ep_learned_return:.2f}")
+                # Reset for next episode
+                self._orig_sum[i] = 0.0
+                self._learned_sum[i] = 0.0
+        # If any episodes finished, log the average returns over recent episodes
+        episodes_logged = len(self.original_ep_returns)  # total episodes recorded so far
+        if episodes_logged > 0 and ( "episode" in infos[-1] or True in dones ):
+            # Compute mean over the window (or over all so far if fewer than window size)
+            mean_orig = np.mean(self.original_ep_returns)
+            mean_learned = np.mean(self.learned_ep_returns)
+            std_err_orig = np.std(self.original_ep_returns) / np.sqrt(len(self.original_ep_returns))
+            std_err_learned = np.std(self.learned_ep_returns) / np.sqrt(len(self.learned_ep_returns))
+
+            # Log to Weights & Biases with current timestep as x-axis
+            wandb.log({
+                "reward/original_ep_return_mean": mean_orig,
+                "reward/original_ep_return_std_err": std_err_orig,
+                "reward/learned_ep_return_mean": mean_learned,
+                "reward/learned_ep_return_std_err": std_err_learned,
+            }, step=self.num_timesteps)
+        return True
+
+# Example usage:
+# env = make_my_env()  # your environment
+# venv = DummyVecEnv([lambda: env])
+# venv = RewardVecEnvWrapper(venv, reward_fn)  # wrap with learned reward
+# model = PPO("MlpPolicy", venv, ...)
+# wandb.init(project="my-project", config=...)
+# model.learn(total_timesteps=100000, callback=RewardLoggerCallback())

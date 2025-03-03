@@ -12,6 +12,7 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
+from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb
 
@@ -121,7 +122,7 @@ def main():
     wenv = wrap_env_with_reward(env, expert_trainer.policy)
     learner = load_ant_learner(wenv, logdir)
     # for i in range(20):
-    learner.learn(1000_000)#, callback=WandbInfoLogger())
+    learner.learn(1000_000, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
     print(f"Timesteps:{1000_000}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
@@ -135,10 +136,9 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
     per_expert = mean_rew / target_rewards
     if log:
         wandb.log({
-            "Phase": phase,
-            "MeanRewards": mean_rew,
-            "StdErrs": std_err,
-            "Ratio": per_expert,
+            "reward/original_ep_return_mean": mean_rew,
+            "reward/original_ep_return_std_err": std_err,
+            "reward/original_ep_return_ratio": per_expert,
         })
     return mean_rew, per_expert, std_err
 
