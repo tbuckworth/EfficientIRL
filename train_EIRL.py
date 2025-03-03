@@ -8,9 +8,11 @@ from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.rewards import reward_wrapper
 from imitation.util import logger as imit_logger
+from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.callbacks import BaseCallback
 
-from CustomEnvMonitor import make_vec_env
+# from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -43,8 +45,6 @@ def wrap_env_with_reward(env, policy):
     )
     return venv_wrapped
 
-import wandb
-from stable_baselines3.common.callbacks import BaseCallback
 
 class WandbInfoLogger(BaseCallback):
     def __init__(self, verbose=0):
@@ -95,7 +95,7 @@ def main():
         expert, env, 10, return_episode_rewards=True
     )
     target_rewards = np.mean(expert_rewards)
-    print(target_rewards)
+    print(f"Target:{target_rewards}")
 
     expert_rollouts = rollout.rollout(
         expert,
