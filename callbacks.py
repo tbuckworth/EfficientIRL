@@ -109,13 +109,14 @@ class RewardLoggerCallback(BaseCallback):
             mean_learned = np.mean(self.learned_ep_returns)
             std_err_orig = np.std(self.original_ep_returns) / np.sqrt(len(self.original_ep_returns))
             std_err_learned = np.std(self.learned_ep_returns) / np.sqrt(len(self.learned_ep_returns))
-
+            corr = np.corrcoef(self.original_ep_returns, self.learned_ep_returns)[0, 1]
             # Log to Weights & Biases with current timestep as x-axis
             wandb.log({
                 "reward/original_ep_return_mean": mean_orig,
                 "reward/original_ep_return_std_err": std_err_orig,
                 "reward/learned_ep_return_mean": mean_learned,
                 "reward/learned_ep_return_std_err": std_err_learned,
+                "reward/reward_function_corr": corr,
             }, step=self.num_timesteps)
         return True
 
