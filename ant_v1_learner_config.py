@@ -111,5 +111,10 @@ def load_ant_sac_learner(env, logdir, policy):
         _init_setup_model=True,
     )
     learner = SAC(**params)
-    learner.policy.actor = policy.actor
+
+    # could be just features_extractor and not pi - check eirl
+    learner.policy.actor.features_extractor.load_state_dict(policy.pi_features_extractor.state_dict())
+    learner.policy.actor.latent_pi.load_state_dict(policy.mlp_extractor.policy_net.state_dict())
+    learner.policy.actor.mu.load_state_dict(policy.action_net.state_dict())
+
     return learner
