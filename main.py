@@ -258,7 +258,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     if not os.path.exists(csv_file):
         df.to_csv(csv_file)
     else:
-        df.to_csv(csv_file, mode='a', header=False, index=False)
+        df.to_csv(csv_file, mode='a', header=False, index=True)
     plot(csv_file, output_file)
     # expert_eirl_trainer = eirl.EIRL(
     #     observation_space=env.observation_space,
