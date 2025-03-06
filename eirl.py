@@ -211,6 +211,7 @@ class EfficientIRLLossCalculator:
         # neglogp = -log_prob
         l2_loss = self.l2_weight * l2_norm
         # loss = neglogp + ent_loss + l2_loss
+        # should we add l2 to the loss?
 
         return EIRLTrainingMetrics(
             kl_loss=loss1,
