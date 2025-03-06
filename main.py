@@ -146,6 +146,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     epochs = 50
     env_name = "seals/CartPole-v0"
     env_name = "seals/Ant-v1"
+    env_name = "seals/Hopper-v1"
     # env = gym.make("CartPole-v1")
 
     env = make_vec_env(
