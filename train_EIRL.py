@@ -20,29 +20,25 @@ from helper_local import import_wandb
 wandb = import_wandb()
 
 import eirl
-from ant_v1_learner_config import load_ant_learner, load_ant_sac_learner
+from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
 
 SEED = 42  # Does this matter?
 
 
-def wrap_env_with_reward(env, policy):
+def wrap_env_with_reward(env, reward_func):
     def predict_processed(
             state: np.ndarray,
             action: np.ndarray,
-            next_state: np.ndarray,
-            done: np.ndarray,
+            next_state: np.ndarray = None,
+            done: np.ndarray = None,
             **kwargs,
     ) -> np.ndarray:
         # this is for the reward function signature
 
         with torch.no_grad():
-            obs = torch.FloatTensor(state).to(device=policy.device)
-            acts = torch.FloatTensor(action).to(device=policy.device)
-            nobs = torch.FloatTensor(next_state).to(device=policy.device)
-            _, log_prob, entropy = eirl.evaluate_actions(policy, obs, acts)
-            rew = policy.predict_values(nobs).squeeze().detach().cpu().numpy()
-            rew[done] = log_prob.detach().cpu().numpy()[done]
-            return rew
+            obs = torch.FloatTensor(state).to(device=reward_func.device)
+            acts = torch.FloatTensor(action).to(device=reward_func.device)
+            return reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
 
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
@@ -119,6 +115,8 @@ def main(consistency_coef=100.):
         rng=default_rng,
         custom_logger=custom_logger,
         consistency_coef=consistency_coef,
+        hard=True,
+        gamma=expert.gamma,
     )
 
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
@@ -126,8 +124,8 @@ def main(consistency_coef=100.):
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised",log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
-    wenv = wrap_env_with_reward(env, expert_trainer.policy)
-    learner = load_ant_sac_learner(wenv, logdir, expert_trainer.policy)
+    wenv = wrap_env_with_reward(env, expert_trainer.reward_func)
+    learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)

@@ -8,7 +8,7 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 
 import eirl
-from ant_v1_learner_config import load_ant_learner, load_ant_sac_learner
+from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
 from callbacks import RewardLoggerCallback
 from helper_local import import_wandb
 from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
@@ -70,8 +70,8 @@ class MyTestCase(unittest.TestCase):
             rng=self.rng,
         )
         logdir = create_logdir(self.env_name, 0)
-        wenv = wrap_env_with_reward(self.env, expert_trainer.policy)
-        learner = load_ant_learner(wenv, logdir)
+        wenv = wrap_env_with_reward(self.env, expert_trainer.reward_func)
+        learner = load_ant_ppo_learner(wenv, logdir)
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())
 
@@ -84,7 +84,7 @@ class MyTestCase(unittest.TestCase):
             rng=self.rng,
         )
         logdir = create_logdir(self.env_name, 0)
-        wenv = wrap_env_with_reward(self.env, expert_trainer.policy)
+        wenv = wrap_env_with_reward(self.env, expert_trainer.reward_func)
         learner = load_ant_sac_learner(wenv, logdir, expert_trainer.policy)
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())

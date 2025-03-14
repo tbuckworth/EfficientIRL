@@ -6,7 +6,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.sac.policies import SACPolicy
 
 
-def load_ant_learner(env, logdir=None):
+def load_ant_ppo_learner(env, logdir, policy):
     antv1_params = OrderedDict([('batch_size', 16),
                                 ('clip_range', 0.3),
                                 ('ent_coef', 3.1441389214159857e-06),
@@ -31,7 +31,7 @@ def load_ant_learner(env, logdir=None):
                                                'norm_reward': True},
                                   'norm_reward': False})])
     ant_params = dict(
-        policy='MlpPolicy',
+        policy=policy,
         env=env,
         learning_rate=0.00017959211641976886,
         n_steps=2048,
@@ -52,9 +52,9 @@ def load_ant_learner(env, logdir=None):
         target_kl=None,
         stats_window_size=100,
         tensorboard_log=logdir,
-        policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
-                       'features_extractor_class': NormalizeFeaturesExtractor,
-                       'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+        # policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
+        #                'features_extractor_class': NormalizeFeaturesExtractor,
+        #                'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
         verbose=0,
         seed=None,
         device="auto",
