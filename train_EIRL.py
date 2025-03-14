@@ -25,7 +25,7 @@ from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
 SEED = 42  # Does this matter?
 
 
-def wrap_env_with_reward(env, reward_func):
+def wrap_env_with_reward(env, reward_func, neg_reward=False):
     def predict_processed(
             state: np.ndarray,
             action: np.ndarray,
@@ -38,7 +38,10 @@ def wrap_env_with_reward(env, reward_func):
         with torch.no_grad():
             obs = torch.FloatTensor(state).to(device=reward_func.device)
             acts = torch.FloatTensor(action).to(device=reward_func.device)
-            return reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
+            rew = reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
+            if neg_reward:
+                return -rew
+            return rew
 
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
@@ -72,6 +75,7 @@ def create_logdir(env_name, seed):
 
 
 def main():
+    neg_reward = True
     consistency_coef = 100.
     learner_timesteps = 1000_000
     gamma = 0.995
@@ -111,7 +115,7 @@ def main():
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
 
-    wenv = wrap_env_with_reward(env, expert_trainer.reward_func)
+    wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward)
     learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
@@ -130,7 +134,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
         ],  # needed for computing rollouts later
     )
     expert = load_policy(
-        "ppo-huggingface",
+        "sac-huggingface",
         organization="HumanCompatibleAI",
         env_name=env_name,
         venv=env,
