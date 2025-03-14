@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import torch
+from imitation.algorithms import bc
 from imitation.data import rollout, wrappers
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
@@ -75,9 +76,9 @@ def create_logdir(env_name, seed):
 
 
 def main():
-    neg_reward = True
+    neg_reward = False
     consistency_coef = 100.
-    learner_timesteps = 1000_000
+    learner_timesteps = 0#1000_000
     gamma = 0.995
     training_increments = 5
     n_epochs = 20
@@ -87,6 +88,7 @@ def main():
     n_eval_episodes = 50
     n_envs = 8
     n_expert_demos = 60
+    algo = "eirl"
     env_name = "seals/Hopper-v1"
     logdir = create_logdir(env_name, SEED)
 
@@ -95,25 +97,42 @@ def main():
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
                                                                                    n_expert_demos)
 
-    expert_trainer = eirl.EIRL(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        demonstrations=expert_transitions,
-        rng=default_rng,
-        custom_logger=custom_logger,
-        consistency_coef=consistency_coef,
-        hard=True,
-        gamma=gamma,
-        batch_size=batch_size,
-        l2_weight=l2_weight,
-        optimizer_cls=torch.optim.Adam,
-        optimizer_kwargs={"lr": lr},
-    )
+    if algo == "eirl":
+        expert_trainer = eirl.EIRL(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_transitions,
+            rng=default_rng,
+            custom_logger=custom_logger,
+            consistency_coef=consistency_coef,
+            hard=True,
+            gamma=gamma,
+            batch_size=batch_size,
+            l2_weight=l2_weight,
+            optimizer_cls=torch.optim.Adam,
+            optimizer_kwargs={"lr": lr},
+        )
+    elif algo == "bc":
+        expert_trainer = bc.BC(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_transitions,
+            rng=default_rng,
+            custom_logger=custom_logger,
+            batch_size=batch_size,
+            l2_weight=l2_weight,
+            optimizer_cls=torch.optim.Adam,
+            optimizer_kwargs={"lr": lr},
+        )
+    else:
+        raise NotImplementedError(f"Unimplemented algorithm: {algo}")
 
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment, progress_bar=False)
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    if learner_timesteps == 0:
+        return
 
     wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward)
     learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)

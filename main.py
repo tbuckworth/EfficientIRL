@@ -147,6 +147,7 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     env_name = "seals/CartPole-v0"
     env_name = "seals/Ant-v1"
     env_name = "seals/Hopper-v1"
+
     # env = gym.make("CartPole-v1")
     threshold = 500
     n_envs = 8
