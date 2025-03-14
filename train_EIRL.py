@@ -14,7 +14,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb
+from helper_local import import_wandb, flatten_trajectories
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 wandb = import_wandb()
@@ -72,6 +72,7 @@ def create_logdir(env_name, seed):
 
 def main(consistency_coef=100.):
     learner_timesteps = 1000_000
+    gamma = 0.995
     env_name = "seals/Ant-v1"
     logdir = create_logdir(env_name, SEED)
     wandb.init(project="EfficientIRL", sync_tensorboard=True)
@@ -105,8 +106,9 @@ def main(consistency_coef=100.):
         env,
         rollout.make_sample_until(min_timesteps=None, min_episodes=60),
         rng=default_rng,
+        exclude_infos=False,
     )
-    expert_transitions = rollout.flatten_trajectories(expert_rollouts)
+    expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
 
     expert_trainer = eirl.EIRL(
         observation_space=env.observation_space,
@@ -116,7 +118,7 @@ def main(consistency_coef=100.):
         custom_logger=custom_logger,
         consistency_coef=consistency_coef,
         hard=True,
-        gamma=expert.gamma,
+        gamma=gamma,
     )
 
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):

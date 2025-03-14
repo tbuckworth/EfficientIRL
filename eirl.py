@@ -92,6 +92,7 @@ class EIRLTrainingMetrics:
     l2_norm: th.Tensor
     l2_loss: th.Tensor
     loss: th.Tensor
+    reward_correl: th.Tensor
 
 
 def get_latents(policy, obs):
@@ -169,6 +170,7 @@ class EfficientIRLLossCalculator:
                 Dict[str, th.Tensor],
             ],
             dones: Union[th.Tensor, np.ndarray],
+            rews: Union[th.Tensor, np.ndarray] = None,
     ) -> EIRLTrainingMetrics:
         """Calculate the supervised learning loss used to train the behavioral clone.
 
@@ -186,7 +188,7 @@ class EfficientIRLLossCalculator:
         #     types.maybe_unwrap_dictobs(obs),
         # )
         acts = util.safe_to_tensor(acts)
-
+        obs = obs.to(th.float32)
         # policy.evaluate_actions's type signatures are incorrect.
         # See https://github.com/DLR-RM/stable-baselines3/issues/1679
         # (_, log_prob, entropy) = policy.evaluate_actions(
@@ -226,6 +228,11 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
+        reward_correl = None
+        if rews is not None:
+            reward_correl = th.corrcoef(th.stack((rews,reward_hat)))[0,1]
+
+
         return EIRLTrainingMetrics(
             kl_loss=loss1,
             consistency_loss=loss2,
@@ -234,6 +241,7 @@ class EfficientIRLLossCalculator:
             l2_norm=l2_norm,
             l2_loss=l2_loss,
             loss=loss,
+            reward_correl=reward_correl,
         )
 
 
@@ -594,8 +602,11 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 types.maybe_unwrap_dictobs(batch["next_obs"]),
             )
             dones = util.safe_to_tensor(batch["dones"], device=self.policy.device)
+            rews = None
+            if "rews" in batch.keys():
+                rews = util.safe_to_tensor(batch["rews"], device=self.policy.device)
 
-            training_metrics = self.loss_calculator(self.policy, self.reward_func, obs_tensor, acts, nobs_tensor, dones)
+            training_metrics = self.loss_calculator(self.policy, self.reward_func, obs_tensor, acts, nobs_tensor, dones, rews)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.
