@@ -102,7 +102,7 @@ def main():
         gamma=gamma,
         batch_size=batch_size,
         l2_weight=l2_weight,
-        optimizer_cls=torch.optim.adam.Adam,
+        optimizer_cls=torch.optim.Adam,
         optimizer_kwargs={"lr": lr},
     )
 
