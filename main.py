@@ -148,16 +148,17 @@ def main(algo_list, filename="EIRL_times2", load_expert=True):
     env_name = "seals/Ant-v1"
     env_name = "seals/Hopper-v1"
     # env = gym.make("CartPole-v1")
+    threshold = 500
+    n_envs = 8
 
     env = make_vec_env(
         f"seals:{env_name}",
         rng=np.random.default_rng(SEED),
-        n_envs=8,
+        n_envs=n_envs,
         post_wrappers=[
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
     )
-    threshold = 500
     if load_expert:
         expert = load_policy(
             "ppo-huggingface",

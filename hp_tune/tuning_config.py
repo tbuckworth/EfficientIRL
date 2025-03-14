@@ -9,6 +9,24 @@ from imitation.scripts.parallel import parallel_ex
 
 tuning_ex = sacred.Experiment("tuning", ingredients=[parallel_ex])
 
+# First, define a base config that declares parallel_run_config
+@tuning_ex.config
+def base_cfg():
+    parallel_run_config = dict()  # just an empty dict for now
+    environment = None  # or some default environment
+    # You can also define placeholders for other top-level keys here if needed
+
+# Next, define a config for environment
+@tuning_ex.config
+def environment_cfg(parallel_run_config, environment):
+    # If environment was overridden from CLI, use it
+    if environment is not None:
+        # Make sure parallel_run_config has the structure you want
+        parallel_run_config.setdefault("base_config_updates", {})
+        parallel_run_config["base_config_updates"].setdefault("environment", {})
+        parallel_run_config["base_config_updates"]["environment"]["gym_id"] = environment
+
+
 
 @tuning_ex.named_config
 def rl():
@@ -39,7 +57,7 @@ def rl():
 @tuning_ex.named_config
 def eirl():
     parallel_run_config = dict(
-        sacred_ex_name="train_imitation",
+        sacred_ex_name="train_eirl",
         run_name="eirl_tuning",
         base_named_configs=["logging.wandb_logging"],
         base_config_updates={

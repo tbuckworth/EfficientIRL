@@ -70,19 +70,56 @@ def create_logdir(env_name, seed):
         os.makedirs(logdir)
     return logdir
 
+
 def main():
     consistency_coef = 100.
     learner_timesteps = 1000_000
     gamma = 0.995
     training_increments = 5
     n_epochs = 20
-    n_eval_episodes = 10
+    lr = 0.0007172435323620212
+    l2_weight = 1.3610189916104634e-6
+    batch_size = 64
+    n_eval_episodes = 50
     n_envs = 8
-    env_name = "seals/Ant-v1"
-
+    n_expert_demos = 60
+    env_name = "seals/Hopper-v1"
     logdir = create_logdir(env_name, SEED)
-    wandb.init(project="EfficientIRL", sync_tensorboard=True)
+
+    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals())
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
+    default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
+                                                                                   n_expert_demos)
+
+    expert_trainer = eirl.EIRL(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=expert_transitions,
+        rng=default_rng,
+        custom_logger=custom_logger,
+        consistency_coef=consistency_coef,
+        hard=True,
+        gamma=gamma,
+        batch_size=batch_size,
+        l2_weight=l2_weight,
+        optimizer_cls=torch.optim.adam.Adam,
+        optimizer_kwargs={"lr": lr},
+    )
+
+    for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
+        expert_trainer.train(n_epochs=increment, progress_bar=False)
+        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
+        print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+
+    wenv = wrap_env_with_reward(env, expert_trainer.reward_func)
+    learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
+    # for i in range(20):
+    learner.learn(learner_timesteps, callback=RewardLoggerCallback())
+    # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
+    # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+
+
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50):
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         f"seals:{env_name}",
@@ -92,7 +129,6 @@ def main():
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
     )
-
     expert = load_policy(
         "ppo-huggingface",
         organization="HumanCompatibleAI",
@@ -108,34 +144,12 @@ def main():
     expert_rollouts = rollout.rollout(
         expert,
         env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=60),
+        rollout.make_sample_until(min_timesteps=None, min_episodes=n_expert_demos),
         rng=default_rng,
         exclude_infos=False,
     )
     expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
-
-    expert_trainer = eirl.EIRL(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        demonstrations=expert_transitions,
-        rng=default_rng,
-        custom_logger=custom_logger,
-        consistency_coef=consistency_coef,
-        hard=True,
-        gamma=gamma,
-    )
-
-    for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
-        expert_trainer.train(n_epochs=increment,progress_bar=False)
-        mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised",log=True)
-        print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
-
-    wenv = wrap_env_with_reward(env, expert_trainer.reward_func)
-    learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
-    # for i in range(20):
-    learner.learn(learner_timesteps, callback=RewardLoggerCallback())
-    # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
-    # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    return default_rng, env, expert_transitions, target_rewards
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):

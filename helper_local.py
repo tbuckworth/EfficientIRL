@@ -1,3 +1,5 @@
+import json
+
 from imitation.data import types
 from typing import List, Any, Mapping, Iterable, Sequence
 
@@ -94,3 +96,9 @@ def transitions_with_rew_collate_fn(
     result["next_obs"] = stack_maybe_dictobs([sample["next_obs"] for sample in batch])
     result["rews"] = stack_maybe_dictobs([sample["rews"] for sample in batch])
     return result
+
+
+def load_json(file_json="your_file.json"):
+    with open(file_json, "r") as file:
+        data = json.load(file)
+    return data
