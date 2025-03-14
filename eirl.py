@@ -23,7 +23,8 @@ import gymnasium as gym
 import numpy as np
 import torch as th
 import tqdm
-from stable_baselines3.common import policies, torch_layers, utils, vec_env
+from imitation.rewards.reward_nets import RewardNet, CnnRewardNet, BasicRewardNet
+from stable_baselines3.common import policies, torch_layers, utils, vec_env, preprocessing
 
 from imitation.algorithms import base as algo_base
 from imitation.data import rollout, types
@@ -92,16 +93,19 @@ class EIRLTrainingMetrics:
     l2_loss: th.Tensor
     loss: th.Tensor
 
+
 def get_latents(policy, obs):
     features = BasePolicy.extract_features(policy, obs, policy.pi_features_extractor)
     latent_pi = policy.mlp_extractor.forward_actor(features)
     return policy.action_net(latent_pi)
+
 
 def alternative_loss(policy, obs, actions):
     features = BasePolicy.extract_features(policy, obs, policy.pi_features_extractor)
     latent_pi = policy.mlp_extractor.forward_actor(features)
     q = policy.action_net(latent_pi)
     distribution = policy._get_action_dist_from_latent(latent_pi)
+
 
 def evaluate_actions(self, obs, actions: th.Tensor, ent_coef=1e-3) -> tuple[Any, Any, Tensor | None | Any]:
     """
@@ -136,17 +140,21 @@ def evaluate_actions(self, obs, actions: th.Tensor, ent_coef=1e-3) -> tuple[Any,
         raise NotImplementedError("Distribution type not implemented.")
     return values, log_prob, entropy
 
+
 @dataclasses.dataclass(frozen=True)
 class EfficientIRLLossCalculator:
     """Functor to compute the loss used in Behavior Cloning."""
 
+    gamma = float
     ent_weight: float
     l2_weight: float
     consistency_coef: float
+    hard: bool
 
     def __call__(
             self,
             policy: policies.ActorCriticPolicy,
+            reward_func: RewardNet,
             obs: Union[
                 types.AnyTensor,
                 types.DictObs,
@@ -185,22 +193,27 @@ class EfficientIRLLossCalculator:
         #     tensor_obs,  # type: ignore[arg-type]
         #     acts,
         # )
-        _, log_prob, entropy = evaluate_actions(policy, obs, acts)
-        # q = get_latents(policy, obs)
-        next_lp = policy.predict_values(nobs).squeeze()
+        value_hat, log_prob, entropy = evaluate_actions(policy, obs, acts)
+        actor_advantage = log_prob
+        if self.hard:
+            actor_advantage += entropy
 
-        # log_probs = q.log_softmax(dim=-1)  # shape: [batch, num_actions]
-        # log_prob_expert = log_probs[th.arange(len(q)), acts.to(th.int64)]  # pick log-p of expert's act
+        # This is only using (obs, acts), but requires all args:
+        reward_hat = reward_func(obs, acts, None, None)
+        next_value_hat = policy.predict_values(nobs).squeeze()
 
+        #TODO: if not hard, next_value_hat[dones] = special value????? (1/(1-gamma))*max_ent?
+        q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
+
+        reward_advantage = q_hat - value_hat
+
+        # TODO: do we really need to add entropy here?
         loss1 = -(log_prob + entropy).mean()
 
-        # q_taken = q[th.arange(len(q)), acts.to(th.int64)]
-        loss2 = ((log_prob - next_lp) * (1 - dones.float())).pow(2).mean()
+        loss2 = (actor_advantage - reward_advantage).pow(2).mean()
         loss = loss1 + loss2 * self.consistency_coef
 
         prob_true_act = th.exp(log_prob).mean()
-        # log_prob = log_prob.mean()
-        # entropy = entropy.mean() if entropy is not None else None
 
         l2_norms = [th.sum(th.square(w)) for w in policy.parameters()]
         l2_norm = sum(l2_norms) / 2  # divide by 2 to cancel with gradient of square
@@ -356,6 +369,9 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             device: Union[str, th.device] = "auto",
             custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
             consistency_coef=10.,
+            reward_func: Optional[Callable] = None,
+            hard=True,
+            gamma=0.99,
     ):
         """Builds EIRL.
 
@@ -421,6 +437,19 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 lr_schedule=lambda _: th.finfo(th.float32).max,
                 features_extractor_class=extractor,
             )
+        if reward_func is None:
+            if preprocessing.is_image_space(observation_space):
+                reward_constructor = CnnRewardNet
+            else:
+                reward_constructor = BasicRewardNet
+            reward_func = reward_constructor(observation_space=observation_space,
+                                             action_space=action_space,
+                                             use_state=True,
+                                             use_action=True,
+                                             use_next_state=False,
+                                             use_done=False,
+                                             )
+        self.reward_func = reward_func.to(utils.get_device(device))
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
         assert self.policy.observation_space == self.observation_space
@@ -434,7 +463,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             self.policy.parameters(),
             **optimizer_kwargs,
         )
-        self.loss_calculator = EfficientIRLLossCalculator(ent_weight, l2_weight, consistency_coef)
+        self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
@@ -566,7 +595,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             )
             dones = util.safe_to_tensor(batch["dones"], device=self.policy.device)
 
-            training_metrics = self.loss_calculator(self.policy, obs_tensor, acts, nobs_tensor, dones)
+            training_metrics = self.loss_calculator(self.policy, self.reward_func, obs_tensor, acts, nobs_tensor, dones)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.
