@@ -23,7 +23,6 @@ wandb = import_wandb()
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
 
-SEED = 42  # Does this matter?
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False):
@@ -75,7 +74,7 @@ def create_logdir(env_name, seed):
     return logdir
 
 
-def main():
+def main(algo = "eirl", seed = 42):
     neg_reward = False
     consistency_coef = 100.
     learner_timesteps = 0#1000_000
@@ -88,14 +87,15 @@ def main():
     n_eval_episodes = 50
     n_envs = 8
     n_expert_demos = 60
-    algo = "eirl"
-    env_name = "seals/Hopper-v1"
-    logdir = create_logdir(env_name, SEED)
 
-    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals())
+    env_name = "seals/Hopper-v1"
+    tags = ["HopperComp"]
+    logdir = create_logdir(env_name, seed)
+
+    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
-                                                                                   n_expert_demos)
+                                                                                   n_expert_demos, seed)
 
     if algo == "eirl":
         expert_trainer = eirl.EIRL(
@@ -132,6 +132,7 @@ def main():
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
         print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
     if learner_timesteps == 0:
+        wandb.finish()
         return
 
     wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward)
@@ -140,10 +141,11 @@ def main():
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
     # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    wandb.finish()
 
 
-def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50):
-    default_rng = np.random.default_rng(SEED)
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42):
+    default_rng = np.random.default_rng(seed)
     env = make_vec_env(
         f"seals:{env_name}",
         rng=default_rng,
@@ -192,4 +194,6 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 
 if __name__ == "__main__":
-    main()
+    for seed in [0, 100, 123, 412, 352, 342, 3232, 23243, 233343]:
+        for algo in ["bc", "eirl"]:
+            main()
