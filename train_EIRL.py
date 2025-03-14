@@ -70,20 +70,24 @@ def create_logdir(env_name, seed):
         os.makedirs(logdir)
     return logdir
 
-def main(consistency_coef=100.):
+def main():
+    consistency_coef = 100.
     learner_timesteps = 1000_000
     gamma = 0.995
+    training_increments = 5
+    n_epochs = 20
+    n_eval_episodes = 10
+    n_envs = 8
     env_name = "seals/Ant-v1"
+
     logdir = create_logdir(env_name, SEED)
     wandb.init(project="EfficientIRL", sync_tensorboard=True)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
-    training_increments = 5
-    n_epochs = 20
     default_rng = np.random.default_rng(SEED)
     env = make_vec_env(
         f"seals:{env_name}",
         rng=default_rng,
-        n_envs=8,
+        n_envs=n_envs,
         post_wrappers=[
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
@@ -96,7 +100,7 @@ def main(consistency_coef=100.):
         venv=env,
     )
     expert_rewards, _ = evaluate_policy(
-        expert, env, 10, return_episode_rewards=True
+        expert, env, n_eval_episodes, return_episode_rewards=True
     )
     target_rewards = np.mean(expert_rewards)
     print(f"Target:{target_rewards}")

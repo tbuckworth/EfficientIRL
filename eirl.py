@@ -22,6 +22,7 @@ from typing import (
 import gymnasium as gym
 import numpy as np
 import torch as th
+import torch.utils.data as th_data
 import tqdm
 from imitation.rewards.reward_nets import RewardNet, CnnRewardNet, BasicRewardNet
 from stable_baselines3.common import policies, torch_layers, utils, vec_env, preprocessing
@@ -34,6 +35,8 @@ from imitation.util import util
 from stable_baselines3.common.distributions import CategoricalDistribution, DiagGaussianDistribution
 from stable_baselines3.common.policies import BasePolicy
 from torch import Tensor
+
+from helper_local import transitions_with_rew_collate_fn
 
 
 @dataclasses.dataclass(frozen=True)
@@ -478,10 +481,20 @@ class EIRL(algo_base.DemonstrationAlgorithm):
         return self._policy
 
     def set_demonstrations(self, demonstrations: algo_base.AnyTransitions) -> None:
-        self._demo_data_loader = algo_base.make_data_loader(
+        kwargs: Mapping[str, Any] = {
+            "shuffle": True,
+            "drop_last": True,
+        }
+        self._demo_data_loader = th_data.DataLoader(
             demonstrations,
-            self.minibatch_size,
+            batch_size=self.minibatch_size,
+            collate_fn=transitions_with_rew_collate_fn,
+            **kwargs,
         )
+        # self._demo_data_loader = algo_base.make_data_loader(
+        #     demonstrations,
+        #     self.minibatch_size,
+        # )
 
     def train(
             self,
