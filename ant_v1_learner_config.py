@@ -31,7 +31,7 @@ def load_ant_ppo_learner(env, logdir, policy):
                                                'norm_reward': True},
                                   'norm_reward': False})])
     ant_params = dict(
-        policy=policy,
+        policy='MlpPolicy',
         env=env,
         learning_rate=0.00017959211641976886,
         n_steps=2048,
@@ -52,15 +52,16 @@ def load_ant_ppo_learner(env, logdir, policy):
         target_kl=None,
         stats_window_size=100,
         tensorboard_log=logdir,
-        # policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
-        #                'features_extractor_class': NormalizeFeaturesExtractor,
-        #                'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+        policy_kwargs={'activation_fn': torch.nn.modules.activation.Tanh,
+                       'features_extractor_class': NormalizeFeaturesExtractor,
+                       'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
         verbose=0,
         seed=None,
         device="auto",
         _init_setup_model=True,
     )
     learner = PPO(**ant_params)
+    learner.policy = policy
     return learner
 
 

@@ -71,7 +71,7 @@ class MyTestCase(unittest.TestCase):
         )
         logdir = create_logdir(self.env_name, 0)
         wenv = wrap_env_with_reward(self.env, expert_trainer.reward_func)
-        learner = load_ant_ppo_learner(wenv, logdir)
+        learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())
 

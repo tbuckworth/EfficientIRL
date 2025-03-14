@@ -145,7 +145,7 @@ def evaluate_actions(self, obs, actions: th.Tensor, ent_coef=1e-3) -> tuple[Any,
 class EfficientIRLLossCalculator:
     """Functor to compute the loss used in Behavior Cloning."""
 
-    gamma = float
+    gamma: float
     ent_weight: float
     l2_weight: float
     consistency_coef: float
