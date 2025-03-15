@@ -198,7 +198,8 @@ class EfficientIRLLossCalculator:
         #     tensor_obs,  # type: ignore[arg-type]
         #     acts,
         # )
-        value_hat, log_prob, entropy = evaluate_actions(policy, obs, acts)
+        value_hat, log_prob, entropy = policy.evaluate_actions(obs, acts)
+        # value_hat, log_prob, entropy = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
         if self.hard:
             actor_advantage += entropy
@@ -212,8 +213,7 @@ class EfficientIRLLossCalculator:
 
         reward_advantage = q_hat - value_hat
 
-        # TODO: do we really need to add entropy here?
-        loss1 = -(log_prob + entropy).mean()
+        loss1 = -log_prob.mean()
 
         loss2 = (actor_advantage - reward_advantage).pow(2).mean()
         loss = loss1 + loss2 * self.consistency_coef
