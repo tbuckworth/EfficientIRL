@@ -119,3 +119,76 @@ def load_ant_sac_learner(env, logdir, policy):
     learner.policy.actor.mu.load_state_dict(policy.action_net.state_dict())
 
     return learner
+
+
+def load_hopper_ppo_learner(env, logdir, policy):
+    # OrderedDict([('batch_size', 512),
+    #              ('clip_range', 0.1),
+    #              ('ent_coef', 0.0010159833764878474),
+    #              ('gae_lambda', 0.98),
+    #              ('gamma', 0.995),
+    #              ('learning_rate', 0.0003904770450788824),
+    #              ('max_grad_norm', 0.9),
+    #              ('n_envs', 1),
+    #              ('n_epochs', 20),
+    #              ('n_steps', 2048),
+    #              ('n_timesteps', 1000000.0),
+    #              ('normalize',
+    #               {'gamma': 0.995, 'norm_obs': False, 'norm_reward': True}),
+    #              ('policy', 'MlpPolicy'),
+    #              ('policy_kwargs',
+    #               {'activation_fn': <
+
+    # class 'torch.nn.modules.activation.ReLU'>,
+    #
+    # 'features_extractor_class': <
+    #
+    # class 'imitation.policies.base.NormalizeFeaturesExtractor'>,
+    #
+    # 'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]}),
+    # ('vf_coef', 0.20315938606555833),
+    # ('normalize_kwargs',
+    #  {'norm_obs': {'gamma': 0.995,
+    #                'norm_obs': False,
+    #                'norm_reward': True},
+    # 'norm_reward': False})])
+    params = dict(
+        policy='MlpPolicy',
+        env=env,
+        learning_rate=0.0003904770450788824,
+        n_steps=2048,
+        batch_size=512,
+        n_epochs=20,
+        gamma=0.995,
+        gae_lambda=0.98,
+        clip_range=0.1,
+        clip_range_vf=None,
+        normalize_advantage=True,
+        ent_coef=0.0010159833764878474,
+        vf_coef=0.20315938606555833,
+        max_grad_norm=0.9,
+        use_sde=False,
+        sde_sample_freq=-1,
+        rollout_buffer_class=None,
+        rollout_buffer_kwargs=None,
+        target_kl=None,
+        stats_window_size=100,
+        tensorboard_log=logdir,
+        policy_kwargs={'activation_fn': torch.nn.modules.activation.ReLU,
+                       'features_extractor_class': NormalizeFeaturesExtractor,
+                       'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+        verbose=0,
+        seed=None,
+        device="auto",
+        _init_setup_model=True,
+    )
+    learner = PPO(**params)
+    learner.policy = policy
+    return learner
+
+def load_ppo_learner(env_name, wenv, logdir, policy):
+    if env_name == "seals/Hopper-v1":
+        return load_hopper_ppo_learner(wenv, logdir, policy)
+    if env_name == "seals/Ant-v1":
+        return load_ant_ppo_learner(wenv, logdir, policy)
+    raise NotImplementedError

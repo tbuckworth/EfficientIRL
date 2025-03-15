@@ -21,7 +21,7 @@ from helper_local import import_wandb, flatten_trajectories
 wandb = import_wandb()
 
 import eirl
-from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
+from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_hopper_ppo_learner, load_ppo_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False):
@@ -76,18 +76,19 @@ def create_logdir(env_name, seed):
 def main(algo="eirl", seed=42, hard=True,
          consistency_coef=100., n_epochs=20):
     neg_reward = False
-    learner_timesteps = 0  # 1000_000
+    learner_timesteps = 1000_000
     gamma = 0.995
     training_increments = 5
     lr = 0.0007172435323620212
     l2_weight = 1.3610189916104634e-6
     batch_size = 64
     n_eval_episodes = 50
-    n_envs = 8
+    n_envs = 16
     n_expert_demos = 60
 
     env_name = "seals/Hopper-v1"
-    tags = ["HopperComp", "Fixed Entropy"]
+
+    tags = ["HopperComp", "Fixed Entropy", "PPO"]
     logdir = create_logdir(env_name, seed)
 
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
@@ -134,7 +135,7 @@ def main(algo="eirl", seed=42, hard=True,
         return
 
     wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward)
-    learner = load_ant_ppo_learner(wenv, logdir, expert_trainer.policy)
+    learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
@@ -193,8 +194,8 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [20, 50]:
+        for n_epochs in [20]:
             for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for hard in [True, False]:
-                    for consistency_coef in [10., 100.]:
+                for hard in [False, True]:
+                    for consistency_coef in [100.]:
                         main(algo, seed, hard=hard, n_epochs=n_epochs, consistency_coef=consistency_coef)
