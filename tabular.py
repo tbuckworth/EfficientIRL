@@ -440,7 +440,7 @@ class TabularMDP:
             print(f"\n{self.name} Environment\t{method}:")
         irls = {}
         for name, policy in self.policies.items():
-            irl_object = irl_func(policy.pi, self.T, self.mu, device=self.device, suppress=True, atol=atol)
+            irl_object = irl_func(policy.pi, self.T, self.reward_vector, self.mu, device=self.device, suppress=True, atol=atol)
             reward, elapsed = irl_object.train()
             policy.irls[method] = irl_object
             if verbose:
@@ -522,7 +522,7 @@ class IRLFunc(ABC):
     convergence_type = None
     use_scheduler = None
 
-    def __init__(self, pi, T, mu=None, n_iterations: int = 10000, lr=1e-2, print_losses=False, device="cpu",
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations: int = 10000, lr=1e-2, print_losses=False, device="cpu",
                  suppress=False, atol=1e-5,
                  state_based=True, soft=True, use_scheduler=False):
         self.n_states, self.n_actions, _ = T.shape
@@ -533,6 +533,7 @@ class IRLFunc(ABC):
         self.atol = atol
         self.state_based = state_based
         self.soft = soft
+        self.true_reward = true_reward
         self.mu = mu
         self.T = T
         self.pi = pi.to(device)
@@ -575,12 +576,16 @@ class IRLFunc(ABC):
     def calculate_loss(self):
         raise NotImplementedError("calculate_loss is an abstract method. It must be overidden.")
 
+    def display_rewards(self):
+        # if state_action_reward:
+        einops.einsum(self.T, self.learned_reward, "s a ns, s a->ns")
+        self.true_reward
+
 
 class DisentangledEIRL(IRLFunc):
-    def __init__(self, pi, T, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
                  atol=1e-5,
                  state_based=True, soft=True):
-        self.hard = not soft
         self.consistency_coef = 10.
         n_states, n_actions, _ = T.shape
         self.learned_log_pi = torch.randn((n_states, n_actions), requires_grad=True, device=device)
@@ -589,19 +594,19 @@ class DisentangledEIRL(IRLFunc):
 
         self.param_list = [self.learned_log_pi, self.learned_reward, self.learned_value]
         self.name = "Disentangled EIRL"
-        super().__init__(pi, T, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
 
     def calculate_loss(self):
         log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
         actor_adv = log_pi_theta
-        if self.hard:
+        if not self.soft:
             actor_adv -= (log_pi_theta.exp() * log_pi_theta).sum(dim=-1).unsqueeze(dim=-1)
 
         next_value = einops.einsum(self.T, self.learned_value, "s a ns, ns -> s a")
 
         q_hat = self.learned_reward + GAMMA * next_value
 
-        reward_adv = q_hat - self.learned_value
+        reward_adv = q_hat - self.learned_value.unsqueeze(-1)
 
         loss1 = -(self.pi * log_pi_theta).mean()
         loss2 = (actor_adv - reward_adv).pow(2).mean()
@@ -610,10 +615,9 @@ class DisentangledEIRL(IRLFunc):
 
 
 class NextValEIRL(IRLFunc):
-    def __init__(self, pi, T, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
                  atol=1e-5,
                  state_based=True, soft=True):
-        self.hard = not soft
         self.consistency_coef = 10.
         n_states, n_actions, _ = T.shape
         self.learned_log_pi = torch.randn((n_states, n_actions), requires_grad=True, device=device)
@@ -621,7 +625,7 @@ class NextValEIRL(IRLFunc):
 
         self.param_list = [self.learned_log_pi, self.learned_reward]
         self.name = "Next Value EIRL"
-        super().__init__(pi, T, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
 
     def calculate_loss(self):
         log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
@@ -904,8 +908,10 @@ class MattGridworld(TabularMDP):
 
 irl_func_list = [DisentangledEIRL, NextValEIRL]
 
-irl_funcs = {irl.name: irl for irl in irl_func_list}
-
+irl_funcs = {
+    "Disentangled EIRL": DisentangledEIRL,
+    "Next Value EIRL": NextValEIRL,
+}
 
 def cust_mpd():
     while True:
