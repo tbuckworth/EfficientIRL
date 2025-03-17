@@ -75,7 +75,7 @@ def create_logdir(env_name, seed):
 
 def main(algo="eirl", seed=42, hard=True,
          consistency_coef=100., n_epochs=20):
-    use_next_state_reward = False
+    use_next_state_reward = True
     neg_reward = False
     rew_const_adj = 0
     learner_timesteps = 1000_000

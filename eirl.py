@@ -215,7 +215,10 @@ class EfficientIRLLossCalculator:
             # This only uses next states:
             ns_rew_hat = state_reward_func(obs, None, nobs, None)
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
-            loss3 = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
+            rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
+            # This is optional, just trying to maximize the probability of rewards under the policy.
+            loss4 = -(reward_hat * log_prob).mean()
+            loss3 = rew_cons_loss + loss4
         else:
             reward_hat = reward_func(obs, None, None, None)
             loss3 = 0
@@ -249,12 +252,15 @@ class EfficientIRLLossCalculator:
         reward_correl = None
         if rews is not None:
             # TO-DO technically should put sa_rew_hat 0 - don't you think?
-            reward_correl = th.corrcoef(th.stack((rews, sa_rew_hat)))[0, 1]
+            reward_correl = th.corrcoef(th.stack((rews, reward_hat)))[0, 1]
 
         if 32432432 % 342 == 4322432 % 32423:
             def norm(arr):
                 a = arr - arr.min()
                 return a / a.max()
+
+            d = reward_advantage.exp()/(reward_advantage.exp()+log_prob.exp())
+            dl = d.log() - (1-d).log()
 
             norm_rew = norm(rews).cpu().numpy()
             plt.scatter(
@@ -290,8 +296,8 @@ class EfficientIRLLossCalculator:
             plt.show()
 
             plt.scatter(
-                x=rews.cpu().numpy(),
-                y=(reward_hat - log_prob).detach().cpu().numpy(),
+                x=reward_hat.detach().cpu().numpy(),
+                y=d.detach().cpu().numpy(),
             )
             plt.show()
 
