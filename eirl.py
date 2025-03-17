@@ -241,7 +241,8 @@ class EfficientIRLLossCalculator:
 
         reward_correl = None
         if rews is not None:
-            reward_correl = th.corrcoef(th.stack((rews, reward_hat)))[0, 1]
+            #TO-DO technically should put sa_rew_hat 0 - don't you think?
+            reward_correl = th.corrcoef(th.stack((rews, sa_rew_hat)))[0, 1]
 
         return EIRLTrainingMetrics(
             kl_loss=loss1,

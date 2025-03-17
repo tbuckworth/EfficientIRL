@@ -88,7 +88,7 @@ def main(algo="eirl", seed=42, hard=True,
 
     env_name = "seals/Hopper-v1"
 
-    tags = ["HopperComp", "Fixed Entropy", "PPO"]
+    tags = ["HopperComp", "Fixed Entropy", "PPO", "NEXT STATE BASED"]
     logdir = create_logdir(env_name, seed)
 
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
