@@ -25,6 +25,7 @@ import torch as th
 import torch.utils.data as th_data
 import tqdm
 from imitation.rewards.reward_nets import RewardNet, CnnRewardNet, BasicRewardNet
+from matplotlib import pyplot as plt
 from stable_baselines3.common import policies, torch_layers, utils, vec_env, preprocessing
 
 from imitation.algorithms import base as algo_base
@@ -155,6 +156,7 @@ class EfficientIRLLossCalculator:
     l2_weight: float
     consistency_coef: float
     hard: bool
+    use_next_state_reward: bool
 
     def __call__(
             self,
@@ -207,25 +209,27 @@ class EfficientIRLLossCalculator:
         if self.hard:
             actor_advantage += entropy
 
-        # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
-        sa_rew_hat = reward_func(obs, acts, None, None)
-        # This only uses next states:
-        ns_rew_hat = state_reward_func(obs, None, nobs, None)
-        reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
+        if self.use_next_state_reward:
+            # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
+            sa_rew_hat = reward_func(obs, acts, None, None)
+            # This only uses next states:
+            ns_rew_hat = state_reward_func(obs, None, nobs, None)
+            reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
+            loss3 = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
+        else:
+            reward_hat = reward_func(obs, None, None, None)
+            loss3 = 0
 
         next_value_hat = policy.predict_values(nobs).squeeze()
 
         # TODO: if not hard, next_value_hat[dones] = special value????? (1/(1-gamma))*max_ent?
         q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
 
-        reward_advantage = q_hat - value_hat
+        reward_advantage = q_hat - value_hat.squeeze()
 
         loss1 = -log_prob.mean()
 
         loss2 = (actor_advantage - reward_advantage).pow(2).mean()
-
-        loss3 = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
-
 
         prob_true_act = th.exp(log_prob).mean()
 
@@ -240,12 +244,56 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + loss2 * self.consistency_coef + loss3 + l2_loss
+        loss = loss1 + loss2 * self.consistency_coef + loss3 * self.consistency_coef + l2_loss
 
         reward_correl = None
         if rews is not None:
-            #TO-DO technically should put sa_rew_hat 0 - don't you think?
+            # TO-DO technically should put sa_rew_hat 0 - don't you think?
             reward_correl = th.corrcoef(th.stack((rews, sa_rew_hat)))[0, 1]
+
+        if 32432432 % 342 == 4322432 % 32423:
+            def norm(arr):
+                a = arr - arr.min()
+                return a / a.max()
+
+            norm_rew = norm(rews).cpu().numpy()
+            plt.scatter(
+                x=norm_rew,
+                y=norm_rew,
+                label="True Rewards"
+            )
+            r_hat = norm(reward_hat).detach().cpu().numpy()
+            plt.scatter(
+                x=norm_rew,
+                y=r_hat,
+                label="Predicted Rewards"
+            )
+            ns_r_hat = norm(ns_rew_hat[~dones]).detach().cpu().numpy()
+            plt.scatter(
+                x=norm(rews[~dones]).cpu().numpy(),
+                y=ns_r_hat,
+                label="Next State Rewards"
+            )
+            sa_r_hat = norm(sa_rew_hat).detach().cpu().numpy()
+            plt.scatter(
+                x=norm_rew,
+                y=sa_r_hat,
+                label="State-Action Rewards"
+            )
+            plt.legend()
+            plt.show()
+
+            plt.scatter(
+                x=sa_r_hat[~dones.cpu().numpy()],
+                y=ns_r_hat[~dones.cpu().numpy()],
+            )
+            plt.show()
+
+            plt.scatter(
+                x=rews.cpu().numpy(),
+                y=(reward_hat - log_prob).detach().cpu().numpy(),
+            )
+            plt.show()
 
         return EIRLTrainingMetrics(
             kl_loss=loss1,
@@ -396,6 +444,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             state_reward_func: Optional[Callable] = None,
             hard=True,
             gamma=0.99,
+            use_next_state_reward=True,
     ):
         """Builds EIRL.
 
@@ -466,22 +515,31 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 reward_constructor = CnnRewardNet
             else:
                 reward_constructor = BasicRewardNet
-            state_reward_func = reward_constructor(observation_space=observation_space,
-                                                   action_space=action_space,
-                                                   use_state=False,
-                                                   use_action=False,
-                                                   use_next_state=True,
-                                                   use_done=False,
-                                                   )
-            reward_func = reward_constructor(observation_space=observation_space,
-                                             action_space=action_space,
-                                             use_state=True,
-                                             use_action=True,
-                                             use_next_state=False,
-                                             use_done=False,
-                                             )
+            if use_next_state_reward:
+                state_reward_func = reward_constructor(observation_space=observation_space,
+                                                       action_space=action_space,
+                                                       use_state=False,
+                                                       use_action=False,
+                                                       use_next_state=True,
+                                                       use_done=False,
+                                                       )
+                reward_func = reward_constructor(observation_space=observation_space,
+                                                 action_space=action_space,
+                                                 use_state=True,
+                                                 use_action=True,
+                                                 use_next_state=False,
+                                                 use_done=False,
+                                                 )
+                self.state_reward_func = state_reward_func.to(utils.get_device(device))
+            else:
+                reward_func = reward_constructor(observation_space=observation_space,
+                                                 action_space=action_space,
+                                                 use_state=True,
+                                                 use_action=False,
+                                                 use_next_state=False,
+                                                 use_done=False, )
+                self.state_reward_func = None
 
-        self.state_reward_func = state_reward_func.to(utils.get_device(device))
         self.reward_func = reward_func.to(utils.get_device(device))
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
@@ -496,7 +554,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             self.policy.parameters(),
             **optimizer_kwargs,
         )
-        self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard)
+        self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
+                                                          use_next_state_reward)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:

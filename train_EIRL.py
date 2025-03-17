@@ -24,7 +24,7 @@ import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_hopper_ppo_learner, load_ppo_learner
 
 
-def wrap_env_with_reward(env, reward_func, neg_reward=False):
+def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
     def predict_processed(
             state: np.ndarray,
             action: np.ndarray,
@@ -40,7 +40,7 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False):
             rew = reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
             if neg_reward:
                 return -rew
-            return rew
+            return rew + rew_const_adj
 
     venv_buffering = wrappers.BufferingWrapper(env)
     venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
@@ -75,12 +75,14 @@ def create_logdir(env_name, seed):
 
 def main(algo="eirl", seed=42, hard=True,
          consistency_coef=100., n_epochs=20):
+    use_next_state_reward = False
     neg_reward = False
+    rew_const_adj = 0
     learner_timesteps = 1000_000
     gamma = 0.995
     training_increments = 5
     lr = 0.0007172435323620212
-    l2_weight = 0#1.3610189916104634e-6
+    l2_weight = 0  # 1.3610189916104634e-6
     batch_size = 64
     n_eval_episodes = 50
     n_envs = 16
@@ -110,6 +112,7 @@ def main(algo="eirl", seed=42, hard=True,
             l2_weight=l2_weight,
             optimizer_cls=torch.optim.Adam,
             optimizer_kwargs={"lr": lr},
+            use_next_state_reward=use_next_state_reward,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(
@@ -134,11 +137,11 @@ def main(algo="eirl", seed=42, hard=True,
         wandb.finish()
         return
 
-    wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward)
+    wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward, rew_const_adj)
     learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
-    # mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="reinforcement",log=True)
+    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement",log=True)
     # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
     wandb.finish()
 
@@ -194,7 +197,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [20]:
+        for n_epochs in [50]:
             for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for hard in [False, True]:
                     for consistency_coef in [100.]:
