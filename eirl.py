@@ -89,8 +89,9 @@ class EIRLTrainingMetrics:
     """Container for the different components of Efficient IRL loss."""
 
     kl_loss: th.Tensor
-    # entropy: Optional[th.Tensor]
-    consistency_loss: th.Tensor  # set to 0 if entropy is None
+    entropy: Optional[th.Tensor]
+    reward_loss: Optional[th.Tensor]
+    consistency_loss: th.Tensor
     prob_true_act: th.Tensor
     l2_norm: th.Tensor
     l2_loss: th.Tensor
@@ -159,6 +160,7 @@ class EfficientIRLLossCalculator:
             self,
             policy: policies.ActorCriticPolicy,
             reward_func: RewardNet,
+            state_reward_func: RewardNet,
             obs: Union[
                 types.AnyTensor,
                 types.DictObs,
@@ -204,11 +206,14 @@ class EfficientIRLLossCalculator:
         if self.hard:
             actor_advantage += entropy
 
-        # This is only using (obs, acts), but requires all args:
-        reward_hat = reward_func(obs, acts, None, None)
+        # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
+        sa_rew_hat = reward_func(obs, acts, None, None)
+        ns_rew_hat = state_reward_func(None, None, nobs, None)
+        reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
+
         next_value_hat = policy.predict_values(nobs).squeeze()
 
-        #TODO: if not hard, next_value_hat[dones] = special value????? (1/(1-gamma))*max_ent?
+        # TODO: if not hard, next_value_hat[dones] = special value????? (1/(1-gamma))*max_ent?
         q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
 
         reward_advantage = q_hat - value_hat
@@ -216,7 +221,10 @@ class EfficientIRLLossCalculator:
         loss1 = -log_prob.mean()
 
         loss2 = (actor_advantage - reward_advantage).pow(2).mean()
-        loss = loss1 + loss2 * self.consistency_coef
+
+        loss3 = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
+
+        loss = loss1 + loss2 * self.consistency_coef + loss3
 
         prob_true_act = th.exp(log_prob).mean()
 
@@ -233,13 +241,13 @@ class EfficientIRLLossCalculator:
 
         reward_correl = None
         if rews is not None:
-            reward_correl = th.corrcoef(th.stack((rews,reward_hat)))[0,1]
-
+            reward_correl = th.corrcoef(th.stack((rews, reward_hat)))[0, 1]
 
         return EIRLTrainingMetrics(
             kl_loss=loss1,
             consistency_loss=loss2,
-            # entropy=entropy,
+            reward_loss=loss3,
+            entropy=entropy,
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
@@ -381,6 +389,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
             consistency_coef=10.,
             reward_func: Optional[Callable] = None,
+            state_reward_func: Optional[Callable] = None,
             hard=True,
             gamma=0.99,
     ):
@@ -453,6 +462,13 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 reward_constructor = CnnRewardNet
             else:
                 reward_constructor = BasicRewardNet
+            state_reward_func = reward_constructor(observation_space=observation_space,
+                                                   action_space=action_space,
+                                                   use_state=False,
+                                                   use_action=False,
+                                                   use_next_state=True,
+                                                   use_done=False,
+                                                   )
             reward_func = reward_constructor(observation_space=observation_space,
                                              action_space=action_space,
                                              use_state=True,
@@ -460,6 +476,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                                              use_next_state=False,
                                              use_done=False,
                                              )
+
+        self.state_reward_func = state_reward_func.to(utils.get_device(device))
         self.reward_func = reward_func.to(utils.get_device(device))
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
@@ -619,7 +637,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             if "rews" in batch.keys():
                 rews = util.safe_to_tensor(batch["rews"], device=self.policy.device)
 
-            training_metrics = self.loss_calculator(self.policy, self.reward_func, obs_tensor, acts, nobs_tensor, dones, rews)
+            training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func, obs_tensor,
+                                                    acts, nobs_tensor, dones, rews)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.

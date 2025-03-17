@@ -439,14 +439,48 @@ class TabularMDP:
         if verbose:
             print(f"\n{self.name} Environment\t{method}:")
         irls = {}
+        true_r = self.reward_vector.cpu().numpy()
+        plt.scatter(true_r, true_r, color="black", label="True Reward")
         for name, policy in self.policies.items():
-            irl_object = irl_func(policy.pi, self.T, self.reward_vector, self.mu, device=self.device, suppress=True, atol=atol)
+            irl_object = irl_func(
+                policy.pi, self.T,
+                self.reward_vector,
+                self.mu, device=self.device,
+                suppress=True, atol=atol,
+                n_iterations=20000,
+            )
             reward, elapsed = irl_object.train()
+            irl_object.display_rewards()
             policy.irls[method] = irl_object
             if verbose:
                 print(f"{name}\tIRL: {reward:.4f}\tElapsed: {elapsed:.4f}")
             irls[name] = {"IRL": reward.item(), "Time": elapsed} if time_it else reward.item()
+        plt.legend()
+        plt.title(f"{self.name}")
+        plt.show()
         self.irls[method] = irls
+
+    def calc_irls_by_policy(self, verbose=False, time_it=False, atol=1e-5):
+        for p_name, policy in self.policies.items():
+            true_r = self.reward_vector.cpu().numpy()
+            plt.scatter(true_r, true_r, color="black", label="True Reward")
+            for irl_name, irl_func in irl_funcs.items():
+                irl_object = irl_func(
+                    policy.pi,
+                    self.T,
+                    self.reward_vector,
+                    self.mu,
+                    device=self.device,
+                    suppress=True,
+                    atol=atol,
+                    n_iterations=20000,
+                )
+                reward, elapsed = irl_object.train()
+                irl_object.display_rewards()
+            plt.legend()
+            plt.title(f"Learned rewards for {p_name} Policy in {self.name}")
+            plt.savefig(f"data/tabular_plots/{self.name}_{p_name}_policy.png")
+            plt.show()
 
     def calc_irls(self, verbose=False, time_it=False, atol=1e-5):
         for irlf in irl_funcs.keys():
@@ -522,7 +556,8 @@ class IRLFunc(ABC):
     convergence_type = None
     use_scheduler = None
 
-    def __init__(self, pi, T, true_reward, mu=None, n_iterations: int = 10000, lr=1e-2, print_losses=False, device="cpu",
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations: int = 10000, lr=1e-2, print_losses=False,
+                 device="cpu",
                  suppress=False, atol=1e-5,
                  state_based=True, soft=True, use_scheduler=False):
         self.n_states, self.n_actions, _ = T.shape
@@ -577,30 +612,45 @@ class IRLFunc(ABC):
         raise NotImplementedError("calculate_loss is an abstract method. It must be overidden.")
 
     def display_rewards(self):
+        # TODO: finish this off:
         # if state_action_reward:
-        einops.einsum(self.T, self.learned_reward, "s a ns, s a->ns")
-        self.true_reward
+        learned_reward = self.learned_reward.squeeze()
+        if self.learned_reward.shape == (self.n_states, self.n_actions):
+            learned_reward = einops.einsum(self.T, self.learned_reward, "s a ns, s a ->ns")
+        plt.scatter(x=self.true_reward.cpu().numpy(), y=learned_reward.detach().cpu().numpy(), label=self.name)
+        # plt.legend()
+        # plt.title(f"{self.name}")
+        # plt.show()
+        print(f"{self.name}")
+        print(learned_reward)
+        print(self.true_reward)
 
 
 class DisentangledEIRL(IRLFunc):
-    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
+                 suppress=False,
                  atol=1e-5,
-                 state_based=True, soft=True):
+                 state_based=False, soft=True):
         self.consistency_coef = 10.
         n_states, n_actions, _ = T.shape
         self.learned_log_pi = torch.randn((n_states, n_actions), requires_grad=True, device=device)
-        self.learned_reward = torch.randn((n_states, n_actions), requires_grad=True, device=device)
+        reward_shape = (n_states, n_actions)
+        if state_based:
+            reward_shape = (n_states, 1)
+        self.learned_reward = torch.randn(reward_shape, requires_grad=True, device=device)
         self.learned_value = torch.randn((n_states,), requires_grad=True, device=device)
 
         self.param_list = [self.learned_log_pi, self.learned_reward, self.learned_value]
         self.name = "Disentangled EIRL"
-        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based,
+                         soft)
 
     def calculate_loss(self):
         log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
         actor_adv = log_pi_theta
         if not self.soft:
-            actor_adv -= (log_pi_theta.exp() * log_pi_theta).sum(dim=-1).unsqueeze(dim=-1)
+            # Adding entropy makes it hard advantage
+            actor_adv = log_pi_theta - (log_pi_theta.exp() * log_pi_theta).sum(dim=-1).unsqueeze(dim=-1)
 
         next_value = einops.einsum(self.T, self.learned_value, "s a ns, ns -> s a")
 
@@ -614,8 +664,29 @@ class DisentangledEIRL(IRLFunc):
         return loss
 
 
+class StateBasedDisentangledEIRL(DisentangledEIRL):
+    def __init__(self, *args, **kwargs):
+        kwargs["state_based"] = True
+        super().__init__(*args, **kwargs)
+        self.name = "State Based Disentangled EIRL"
+
+class HardDisentangledEIRL(DisentangledEIRL):
+    def __init__(self, *args, **kwargs):
+        kwargs["soft"] = False
+        super().__init__(*args, **kwargs)
+        self.name = "Hard Disentangled EIRL"
+
+class HardStateBasedDisentangledEIRL(DisentangledEIRL):
+    def __init__(self, *args, **kwargs):
+        kwargs["state_based"] = True
+        kwargs["soft"] = False
+        super().__init__(*args, **kwargs)
+        self.name = "Hard State Based Disentangled EIRL"
+
+
 class NextValEIRL(IRLFunc):
-    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu", suppress=False,
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
+                 suppress=False,
                  atol=1e-5,
                  state_based=True, soft=True):
         self.consistency_coef = 10.
@@ -625,7 +696,8 @@ class NextValEIRL(IRLFunc):
 
         self.param_list = [self.learned_log_pi, self.learned_reward]
         self.name = "Next Value EIRL"
-        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based, soft)
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based,
+                         soft)
 
     def calculate_loss(self):
         log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
@@ -910,8 +982,12 @@ irl_func_list = [DisentangledEIRL, NextValEIRL]
 
 irl_funcs = {
     "Disentangled EIRL": DisentangledEIRL,
-    "Next Value EIRL": NextValEIRL,
+    "State Based Disentangled EIRL": StateBasedDisentangledEIRL,
+    # "Hard Disentangled EIRL": HardDisentangledEIRL,
+    # "Hard State Based Disentangled EIRL": HardStateBasedDisentangledEIRL,
+    # "Next Value EIRL": NextValEIRL,
 }
+
 
 def cust_mpd():
     while True:
@@ -1043,10 +1119,10 @@ def plot_timings(csv_dir):
 
 def main():
     envs = [
-        # DogSatMat(),
+        DogSatMat(),
         # CustMDP(),
         # OneStepOther(),
-        OneStep(),
+        # OneStep(),
         # DiffParents(),
         # AscenderLong(n_states=6),
         # MattGridworld(),
@@ -1055,7 +1131,7 @@ def main():
     envs = {e.name: e for e in envs}
 
     for name, env in envs.items():
-        df = env.calc_irls(verbose=True, time_it=False, atol=1e-4)
+        df = env.calc_irls_by_policy(verbose=True, time_it=False, atol=1e-8)
         # print(df)
         # print(f"\n{name}:\n{env.meg_pirc()}")
 
