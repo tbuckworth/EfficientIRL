@@ -80,7 +80,7 @@ def main(algo="eirl", seed=42, hard=True,
     gamma = 0.995
     training_increments = 5
     lr = 0.0007172435323620212
-    l2_weight = 1.3610189916104634e-6
+    l2_weight = 0#1.3610189916104634e-6
     batch_size = 64
     n_eval_episodes = 50
     n_envs = 16

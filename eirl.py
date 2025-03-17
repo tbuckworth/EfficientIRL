@@ -194,6 +194,7 @@ class EfficientIRLLossCalculator:
         # )
         acts = util.safe_to_tensor(acts)
         obs = obs.to(th.float32)
+        nobs = nobs.to(th.float32)
         # policy.evaluate_actions's type signatures are incorrect.
         # See https://github.com/DLR-RM/stable-baselines3/issues/1679
         # (_, log_prob, entropy) = policy.evaluate_actions(
@@ -208,7 +209,8 @@ class EfficientIRLLossCalculator:
 
         # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
         sa_rew_hat = reward_func(obs, acts, None, None)
-        ns_rew_hat = state_reward_func(None, None, nobs, None)
+        # This only uses next states:
+        ns_rew_hat = state_reward_func(obs, None, nobs, None)
         reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
 
         next_value_hat = policy.predict_values(nobs).squeeze()
@@ -224,7 +226,6 @@ class EfficientIRLLossCalculator:
 
         loss3 = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
 
-        loss = loss1 + loss2 * self.consistency_coef + loss3
 
         prob_true_act = th.exp(log_prob).mean()
 
@@ -239,6 +240,8 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
+        loss = loss1 + loss2 * self.consistency_coef + loss3 + l2_loss
+
         reward_correl = None
         if rews is not None:
             #TO-DO technically should put sa_rew_hat 0 - don't you think?
@@ -248,7 +251,7 @@ class EfficientIRLLossCalculator:
             kl_loss=loss1,
             consistency_loss=loss2,
             reward_loss=loss3,
-            entropy=entropy,
+            entropy=entropy.mean(),
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
