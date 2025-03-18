@@ -72,7 +72,7 @@ def create_logdir(env_name, seed):
 
 def main(algo="eirl",
          seed=42,
-         hard=True,
+         hard=False,
          consistency_coef=100.,
          n_epochs=20,
          model_file=None,
@@ -90,12 +90,13 @@ def main(algo="eirl",
          n_eval_episodes=50,
          n_envs=16,
          n_expert_demos=60,
+         extra_tags=None,
          ):
     net_arch = [64, 64]
 
     env_name = "seals/Hopper-v1"
 
-    tags = ["HopperComp", "Fixed Entropy", "PPO", "NEXT STATE BASED"]
+    tags = ["HopperComp", "Fixed Entropy", "PPO", "NEXT STATE BASED"] + (extra_tags if extra_tags is not None else [])
     logdir = create_logdir(env_name, seed)
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
@@ -147,8 +148,14 @@ def main(algo="eirl",
         epoch = (i + 1) * increment
         print(f"Epoch:{epoch}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
     if epoch is not None:
-        torch.save({'model_state_dict': expert_trainer.policy.state_dict()},
-                   f'{logdir}/model_SUP_{epoch}.pth')
+        obj = {'model_state_dict': expert_trainer.policy.state_dict()}
+        obj["reward_func"] = expert_trainer.reward_func
+        if use_next_state_reward:
+            obj["state_reward_func"] = expert_trainer.state_reward_func
+        if log_prob_adj_reward:
+            obj["lp_adj_reward"] = expert_trainer.lp_adj_reward
+
+        torch.save(obj, f'{logdir}/model_SUP_{epoch}.pth')
     if learner_timesteps == 0:
         wandb.finish()
         return
@@ -185,8 +192,13 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [50]:
+        for n_epochs in [100]:
             for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for hard in [False, True]:
-                    for log_prob_adj_reward in [True, False]:
-                        main(algo, seed, hard=hard, n_epochs=n_epochs, log_prob_adj_reward=log_prob_adj_reward)
+                for use_next_state_reward in [True, False]:
+                    for maximize_reward in [False, True]:
+                        main(algo, seed,
+                             n_epochs=n_epochs,
+                             use_next_state_reward=use_next_state_reward,
+                             maximize_reward=maximize_reward,
+                             extra_tags=["Learner use_next"]
+                             )

@@ -212,7 +212,7 @@ class EfficientIRLLossCalculator:
         # value_hat, log_prob, entropy = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
         if self.hard:
-            actor_advantage += entropy
+            actor_advantage = log_prob + entropy
 
         if self.use_next_state_reward:
             # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
@@ -221,10 +221,7 @@ class EfficientIRLLossCalculator:
             ns_rew_hat = state_reward_func(obs, None, nobs, None)
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
-            # This is optional, just trying to maximize the probability of rewards under the policy.
-            # loss4 = -(reward_hat * log_prob).mean()
-            # trying another crazy idea:
-            # loss4 = -reward_hat.mean()
+
             loss3 = rew_cons_loss
         else:
             reward_hat = reward_func(obs, None, None, None)
@@ -316,7 +313,7 @@ class EfficientIRLLossCalculator:
 
             plt.scatter(
                 x=norm(rews).cpu().numpy(),
-                y=norm(reward_hat + entropy).detach().cpu().numpy(),
+                y=norm(dl).detach().cpu().numpy(),
             )
             plt.show()
 

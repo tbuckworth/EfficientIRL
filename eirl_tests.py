@@ -11,7 +11,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
-from helper_local import import_wandb, get_config, load_env, get_policy_for
+from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions
 from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
 
 wandb = import_wandb()
@@ -94,7 +94,7 @@ class MyTestCase(unittest.TestCase):
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_file = "logs/train/seals/Hopper-v1/2025-03-18__09-08-07__seed_0/model_SUP_50.pth"
+        model_file = "logs/train/seals/Hopper-v1/2025-03-18__10-15-24__seed_0/model_SUP_50.pth"
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
@@ -105,8 +105,50 @@ class TestHopperLearner(unittest.TestCase):
         policy.to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
         self.learner = load_ppo_learner(env_name, env, None, policy)
-    def test_hopper(self):
+        self.policy = policy
+        self.cfg = cfg
+        self.model_file = model_file
+
+    def test_learner(self):
         self.learner.learn(1000_000)
+
+    def test_trainer(self):
+        default_rng, env, expert_transitions, target_rewards = load_expert_transitions(
+            self.cfg["env_name"],
+            self.cfg["n_envs"],
+            self.cfg["n_eval_episodes"],
+            10,#self.cfg["n_expert_demos"],
+            self.cfg["seed"]
+        )
+        expert_trainer = eirl.EIRL(
+            policy=self.policy,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_transitions,
+            rng=default_rng,
+            consistency_coef=self.cfg["consistency_coef"],
+            hard=self.cfg["hard"],
+            gamma=self.cfg["gamma"],
+            batch_size=self.cfg["batch_size"],
+            l2_weight=self.cfg["l2_weight"],
+            optimizer_cls=torch.optim.Adam,
+            optimizer_kwargs={"lr": self.cfg["lr"]},
+            use_next_state_reward=self.cfg["use_next_state_reward"],
+            maximize_reward=self.cfg["maximize_reward"],
+            log_prob_adj_reward=self.cfg["log_prob_adj_reward"],
+        )
+        expert_trainer.reward_func.load_state_dict(
+            torch.load(self.model_file, map_location=self.policy.device
+                       )["reward_func"])
+        if self.cfg["use_next_state_reward"]:
+            expert_trainer.state_reward_func.load_state_dict(
+                torch.load(self.model_file, map_location=self.policy.device
+                           )["state_reward_func"])
+        if self.cfg["log_prob_adj_reward"]:
+            expert_trainer.lp_adj_reward.load_state_dict(
+                torch.load(self.model_file, map_location=self.policy.device
+                           )["lp_adj_reward"])
+        expert_trainer.train(n_epochs=5, progress_bar=False)
 
 
 
