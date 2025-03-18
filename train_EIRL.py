@@ -91,6 +91,7 @@ def main(algo="eirl",
          n_envs=16,
          n_expert_demos=60,
          extra_tags=None,
+         early_learning=False,
          ):
     net_arch = [64, 64]
 
@@ -147,13 +148,15 @@ def main(algo="eirl",
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
         epoch = (i + 1) * increment
         print(f"Epoch:{epoch}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+        if per_expert > 1 and early_learning:
+            break
     if epoch is not None:
         obj = {'model_state_dict': expert_trainer.policy.state_dict()}
-        obj["reward_func"] = expert_trainer.reward_func
+        obj["reward_func"] = expert_trainer.reward_func.state_dict()
         if use_next_state_reward:
-            obj["state_reward_func"] = expert_trainer.state_reward_func
+            obj["state_reward_func"] = expert_trainer.state_reward_func.state_dict()
         if log_prob_adj_reward:
-            obj["lp_adj_reward"] = expert_trainer.lp_adj_reward
+            obj["lp_adj_reward"] = expert_trainer.lp_adj_reward.state_dict()
 
         torch.save(obj, f'{logdir}/model_SUP_{epoch}.pth')
     if learner_timesteps == 0:
@@ -193,12 +196,15 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [100]:
-            for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for use_next_state_reward in [True, False]:
-                    for maximize_reward in [False, True]:
-                        main(algo, seed,
-                             n_epochs=n_epochs,
-                             use_next_state_reward=use_next_state_reward,
-                             maximize_reward=maximize_reward,
-                             extra_tags=["Learner use_next"]
-                             )
+            for seed in [0]:#, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
+                for use_next_state_reward in [True]:
+                    for maximize_reward in [True]:
+                        for hard in [True, False]:
+                            main(algo, seed,
+                                 n_epochs=n_epochs,
+                                 use_next_state_reward=use_next_state_reward,
+                                 maximize_reward=maximize_reward,
+                                 extra_tags=["Learner use_next", "Loadable"],
+                                 early_learning=True,
+                                 learner_timesteps=1000_000,
+                                 )

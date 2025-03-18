@@ -1,3 +1,5 @@
+import os
+import re
 import unittest
 
 import numpy as np
@@ -91,10 +93,21 @@ class MyTestCase(unittest.TestCase):
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())
 
+
+def get_latest_model(folder, keyword):
+    search = lambda x: re.search(rf"model_{keyword}_(\d*).pth", x)
+    if search(folder):
+        return folder
+    files = [os.path.join(folder, x) for x in os.listdir(folder)]
+    last_checkpoint = max([int(search(x).group(1)) for x in files if search(x)])
+    return [x for x in files if re.search(f"model_{keyword}_{last_checkpoint}.pth", x)][0]
+
+
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_file = "logs/train/seals/Hopper-v1/2025-03-18__10-15-24__seed_0/model_SUP_50.pth"
+        logdir = "logs/train/seals/Hopper-v1/2025-03-18__11-37-00__seed_0/"
+        model_file = get_latest_model(logdir, "SUP")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
