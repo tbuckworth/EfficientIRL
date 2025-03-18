@@ -186,9 +186,60 @@ def load_hopper_ppo_learner(env, logdir, policy):
     learner.policy = policy
     return learner
 
+
+def load_cartpole_ppo_learner(wenv, logdir, policy):
+    OrderedDict([('batch_size', 256),
+                 ('clip_range', 'lin_0.2'),
+                 ('ent_coef', 0.0),
+                 ('gae_lambda', 0.8),
+                 ('gamma', 0.98),
+                 ('learning_rate', 'lin_0.001'),
+                 ('n_envs', 8),
+                 ('n_epochs', 20),
+                 ('n_steps', 32),
+                 ('n_timesteps', 100000.0),
+                 ('policy', 'MlpPolicy'),
+                 ('normalize', False)])
+
+    params = dict(
+        policy=policy,
+        env=wenv,
+        learning_rate='lin_0.001',
+        n_steps=32,
+        batch_size=256,
+        n_epochs=20,
+        gamma=0.98,
+        gae_lambda=0.8,
+        clip_range='lin_0.2',
+        clip_range_vf=None,
+        normalize_advantage=True,
+        ent_coef=0,
+        vf_coef=0.20315938606555833,
+        max_grad_norm=0.9,
+        use_sde=False,
+        sde_sample_freq=-1,
+        rollout_buffer_class=None,
+        rollout_buffer_kwargs=None,
+        target_kl=None,
+        stats_window_size=100,
+        tensorboard_log=logdir,
+        # policy_kwargs={'activation_fn': torch.nn.modules.activation.ReLU,
+        #                'features_extractor_class': NormalizeFeaturesExtractor,
+        #                'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+        verbose=0,
+        seed=None,
+        device="auto",
+        _init_setup_model=True,
+    )
+    learner = PPO(**params)
+    return learner
+
+
 def load_ppo_learner(env_name, wenv, logdir, policy):
     if env_name == "seals/Hopper-v1":
         return load_hopper_ppo_learner(wenv, logdir, policy)
     if env_name == "seals/Ant-v1":
         return load_ant_ppo_learner(wenv, logdir, policy)
+    if env_name == "seals/CartPole-v1":
+        return load_cartpole_ppo_learner(wenv, logdir, policy)
     raise NotImplementedError

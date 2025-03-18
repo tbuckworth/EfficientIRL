@@ -144,10 +144,10 @@ def get_config(logdir, pathname="config.npy"):
     return np.load(os.path.join(logdir, pathname), allow_pickle='TRUE').item()
 
 
-def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42):
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac"):
     default_rng, env = load_env(env_name, n_envs, seed)
     expert = load_policy(
-        "sac-huggingface",
+        f"{expert_algo}-huggingface",
         organization="HumanCompatibleAI",
         env_name=env_name,
         venv=env,

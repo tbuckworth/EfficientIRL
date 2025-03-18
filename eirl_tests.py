@@ -131,7 +131,8 @@ class TestHopperLearner(unittest.TestCase):
             self.cfg["n_envs"],
             self.cfg["n_eval_episodes"],
             10,#self.cfg["n_expert_demos"],
-            self.cfg["seed"]
+            self.cfg["seed"],
+            self.cfg["expert_algo"],
         )
         expert_trainer = eirl.EIRL(
             policy=self.policy,

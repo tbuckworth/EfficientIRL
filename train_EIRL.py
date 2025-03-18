@@ -1,4 +1,5 @@
 import os
+import re
 import time
 
 import numpy as np
@@ -13,6 +14,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for
+from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 wandb = import_wandb()
@@ -92,18 +94,20 @@ def main(algo="eirl",
          n_expert_demos=60,
          extra_tags=None,
          early_learning=False,
+         env_name = "seals/Hopper-v1",
+         overrides = None,
+         expert_algo="sac",
+         override_env_name=None,
          ):
     net_arch = [64, 64]
 
-    env_name = "seals/Hopper-v1"
-
-    tags = ["HopperComp", "Fixed Entropy", "PPO", "NEXT STATE BASED"] + (extra_tags if extra_tags is not None else [])
+    tags = [] + (extra_tags if extra_tags is not None else [])
     logdir = create_logdir(env_name, seed)
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
-                                                                                   n_expert_demos, seed)
+                                                                                   n_expert_demos, seed, expert_algo)
 
     policy = get_policy_for(env.observation_space, env.action_space, net_arch)
     if model_file is not None:
@@ -166,7 +170,13 @@ def main(algo="eirl",
         rfunc = expert_trainer.lp_adj_reward
     else:
         rfunc = expert_trainer.reward_func
-    wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
+    if overrides is not None:
+        if override_env_name is None:
+            override_env_name = env_name
+        new_env = overridden_vec_env(override_env_name, n_envs, overrides)
+        wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
+    else:
+        wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
     learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
@@ -199,7 +209,7 @@ if __name__ == "__main__":
             for seed in [0]:#, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for use_next_state_reward in [True]:
                     for maximize_reward in [True]:
-                        for hard in [True, False]:
+                        for hard in [False, True]:
                             main(algo, seed,
                                  n_epochs=n_epochs,
                                  use_next_state_reward=use_next_state_reward,
@@ -207,4 +217,8 @@ if __name__ == "__main__":
                                  extra_tags=["Learner use_next", "Loadable"],
                                  early_learning=True,
                                  learner_timesteps=1000_000,
+                                 env_name="seals/CartPole-v0",
+                                 override_env_name="CartPole-v1",
+                                 overrides={"gravity": 15.0},
+                                 expert_algo="ppo",
                                  )
