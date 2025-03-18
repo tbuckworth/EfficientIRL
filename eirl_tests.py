@@ -106,14 +106,14 @@ def get_latest_model(folder, keyword):
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logdir = "logs/train/seals/CartPole-v0/2025-03-18__16-19-04__seed_0/model_SUP_20.pth"
+        logdir = "logs/train/seals/CartPole-v0/2025-03-18__17-35-58__seed_0"
         model_file = get_latest_model(logdir, "SUP")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
         seed = cfg["seed"]
         net_arch = cfg["net_arch"]
-        net_arch = [32, 32]
+        # net_arch = [32, 32]
         default_rng, env = load_env(env_name, n_envs, seed)
         policy = get_policy_for(env.observation_space, env.action_space, net_arch)
         policy.to(device)

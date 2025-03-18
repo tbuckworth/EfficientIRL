@@ -27,6 +27,7 @@ from ant_v1_learner_config import load_ppo_learner
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
     is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
     n_actions = env.action_space.n
+
     def predict_processed(
             state: np.ndarray,
             action: np.ndarray,
@@ -100,10 +101,11 @@ def main(algo="eirl",
          n_expert_demos=60,
          extra_tags=None,
          early_learning=False,
-         env_name = "seals/Hopper-v1",
-         overrides = None,
+         env_name="seals/Hopper-v1",
+         overrides=None,
          expert_algo="sac",
          override_env_name=None,
+         enforce_rew_val_consistency=True,
          ):
     net_arch = [64, 64]
 
@@ -137,6 +139,7 @@ def main(algo="eirl",
             use_next_state_reward=use_next_state_reward,
             maximize_reward=maximize_reward,
             log_prob_adj_reward=log_prob_adj_reward,
+            enforce_rew_val_consistency=enforce_rew_val_consistency,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(
@@ -212,10 +215,10 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [20]:
-            for seed in [0]:#, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for use_next_state_reward in [True]:
+            for seed in [0]:  # , 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
+                for use_next_state_reward in [False]:
                     for maximize_reward in [False]:
-                        for hard in [False, True]:
+                        for hard in [False]:
                             main(algo, seed,
                                  n_epochs=n_epochs,
                                  use_next_state_reward=use_next_state_reward,
@@ -227,4 +230,6 @@ if __name__ == "__main__":
                                  override_env_name="CartPole-v1",
                                  overrides={"gravity": 15.0},
                                  expert_algo="ppo",
+                                 hard=hard,
+                                 enforce_rew_val_consistency=True,
                                  )

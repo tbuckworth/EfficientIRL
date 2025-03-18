@@ -479,7 +479,7 @@ class TabularMDP:
                 irl_object.display_rewards()
             plt.legend()
             plt.title(f"Learned rewards for {p_name} Policy in {self.name}")
-            plt.savefig(f"data/tabular_plots/{self.name}_{p_name}_policy.png")
+            plt.savefig(f"data/tabular_plots/alt/{self.name}_{p_name}_policy2.png")
             plt.show()
 
     def calc_irls(self, verbose=False, time_it=False, atol=1e-5):
@@ -628,6 +628,35 @@ class IRLFunc(ABC):
         print(learned_reward)
         print(self.true_reward)
 
+class AlternativeEIRL(IRLFunc):
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
+                 suppress=False,
+                 atol=1e-5,
+                 state_based=False, soft=True):
+        self.consistency_coef = 10.
+        n_states, n_actions, _ = T.shape
+        self.learned_log_pi = torch.randn((n_states, n_actions), requires_grad=True, device=device)
+        self.ns_log_pi = torch.randn((n_states,), requires_grad=True, device=device)
+        self.learned_value = torch.randn((n_states,), requires_grad=True, device=device)
+        self.learned_reward = None
+        self.param_list = [self.learned_log_pi, self.ns_log_pi, self.learned_value]
+        self.name = "Alternative EIRL"
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based,
+                         soft)
+
+    def calculate_loss(self):
+        log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
+
+        next_value = einops.einsum(self.T, self.learned_value, "s a ns, ns -> s a")
+        log_pi_target = einops.einsum(self.T, self.ns_log_pi, "s a ns, ns -> s a")
+
+        self.learned_reward = log_pi_target - GAMMA * next_value + self.learned_value.unsqueeze(-1)
+
+        loss1 = -(self.pi * log_pi_theta).mean()
+        loss2 = (log_pi_theta - log_pi_target).pow(2).mean()
+        loss3 = log_pi_target.pow(2).mean()
+        loss = loss1 + loss2 * self.consistency_coef + loss3
+        return loss
 
 class DisentangledEIRL(IRLFunc):
     def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
@@ -984,6 +1013,7 @@ class MattGridworld(TabularMDP):
 irl_func_list = [DisentangledEIRL, NextValEIRL]
 
 irl_funcs = {
+    "Alternative EIRL": AlternativeEIRL,
     "Disentangled EIRL": DisentangledEIRL,
     "State Based Disentangled EIRL": StateBasedDisentangledEIRL,
     # "Hard Disentangled EIRL": HardDisentangledEIRL,
@@ -1123,12 +1153,13 @@ def plot_timings(csv_dir):
 def main():
     envs = [
         AscenderLong(n_states=6),
+        MattGridworld(),
         DogSatMat(),
         CustMDP(),
         # OneStepOther(),
         # OneStep(),
         # DiffParents(),
-        MattGridworld(),
+
     ]
     # envs = [MattGridworld()]
     envs = {e.name: e for e in envs}

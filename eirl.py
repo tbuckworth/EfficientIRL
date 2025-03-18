@@ -100,6 +100,7 @@ class EIRLTrainingMetrics:
     loss: th.Tensor
     reward_correl: th.Tensor
     weighted_reward: Optional[th.Tensor]
+    rew_adv_loss: Optional[th.Tensor]
 
 
 def get_latents(policy, obs):
@@ -161,6 +162,7 @@ class EfficientIRLLossCalculator:
     use_next_state_reward: bool
     maximize_reward: bool
     log_prob_adj_reward: bool
+    enforce_rew_val_consistency: bool
 
     def __call__(
             self,
@@ -253,6 +255,11 @@ class EfficientIRLLossCalculator:
 
         prob_true_act = th.exp(log_prob).mean()
 
+        if self.enforce_rew_val_consistency:
+            rew_adv_loss = reward_advantage.pow(2).mean()
+        else:
+            rew_adv_loss = 0
+
         if dones.any():
             pass
 
@@ -267,7 +274,7 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + (loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss
+        loss = loss1 + (loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss + rew_adv_loss
 
         reward_correl = None
         if rews is not None:
@@ -357,6 +364,7 @@ class EfficientIRLLossCalculator:
             loss=loss,
             weighted_reward=loss4,
             reward_correl=reward_correl,
+            rew_adv_loss=rew_adv_loss,
         )
 
 
@@ -499,6 +507,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             use_next_state_reward=True,
             maximize_reward=False,
             log_prob_adj_reward=False,
+            enforce_rew_val_consistency=False,
     ):
         """Builds EIRL.
 
@@ -616,7 +625,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             **optimizer_kwargs,
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
-                                                          use_next_state_reward, maximize_reward, log_prob_adj_reward)
+                                                          use_next_state_reward, maximize_reward, log_prob_adj_reward,
+                                                          enforce_rew_val_consistency)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
