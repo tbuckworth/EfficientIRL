@@ -1,7 +1,6 @@
 import os
 import time
 
-
 import gymnasium as gym
 import numpy as np
 import torch
@@ -93,22 +92,27 @@ def get_policy_for(observation_space, action_space, net_arch):
     )
 
 
-def main(algo="eirl", seed=42, hard=True,
-         consistency_coef=100., n_epochs=20, model_file=None):
-    use_next_state_reward = True
-    log_prob_adj_reward = False
-    neg_reward = False
-    maximize_reward = False
-    rew_const_adj = 0
-    learner_timesteps = 1000_000
-    gamma = 0.995
-    training_increments = 5
-    lr = 0.0007172435323620212
-    l2_weight = 0  # 1.3610189916104634e-6
-    batch_size = 64
-    n_eval_episodes = 50
-    n_envs = 16
-    n_expert_demos = 60
+def main(algo="eirl",
+         seed=42,
+         hard=True,
+         consistency_coef=100.,
+         n_epochs=20,
+         model_file=None,
+         use_next_state_reward=True,
+         log_prob_adj_reward=False,
+         neg_reward=False,
+         maximize_reward=False,
+         rew_const_adj=0,
+         learner_timesteps=1000_000,
+         gamma=0.995,
+         training_increments=5,
+         lr=0.0007172435323620212,
+         l2_weight=0,  # 1.3610189916104634e-6,
+         batch_size=64,
+         n_eval_episodes=50,
+         n_envs=16,
+         n_expert_demos=60,
+         ):
     net_arch = [64, 64]
 
     env_name = "seals/Hopper-v1"
@@ -178,7 +182,7 @@ def main(algo="eirl", seed=42, hard=True,
     learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
-    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement",log=True)
+    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
                f'{logdir}/model_RL_{learner_timesteps}.pth')
     # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
@@ -239,5 +243,5 @@ if __name__ == "__main__":
         for n_epochs in [50]:
             for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for hard in [False, True]:
-                    for consistency_coef in [100.]:
-                        main(algo, seed, hard=hard, n_epochs=n_epochs, consistency_coef=consistency_coef)
+                    for log_prob_adj_reward in [True, False]:
+                        main(algo, seed, hard=hard, n_epochs=n_epochs, log_prob_adj_reward=log_prob_adj_reward)
