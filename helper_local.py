@@ -173,7 +173,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
 def load_env(env_name, n_envs, seed):
     default_rng = np.random.default_rng(seed)
     env = make_vec_env(
-        f"seals:{env_name}",
+        f"{env_name}",
         rng=default_rng,
         n_envs=n_envs,
         post_wrappers=[

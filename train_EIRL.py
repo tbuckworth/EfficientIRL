@@ -25,8 +25,10 @@ from ant_v1_learner_config import load_ppo_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
+    n_actions = None
     is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    n_actions = env.action_space.n
+    if is_discrete:
+        n_actions = env.action_space.n
 
     def predict_processed(
             state: np.ndarray,
@@ -182,7 +184,7 @@ def main(algo="eirl",
     if overrides is not None:
         if override_env_name is None:
             override_env_name = env_name
-        new_env = overridden_vec_env(override_env_name, n_envs, overrides)
+        env = overridden_vec_env(override_env_name, n_envs, overrides)
         wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
     else:
         wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
@@ -211,23 +213,28 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
         })
     return mean_rew, per_expert, std_err
 
+env_names = [
+    "seals:seals/Cartpole-v0",
+    "seals:seals/Hopper-v1",
+    "seals:seals/Ant-v1",
+]
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [50]:
-            for seed in [0]:  # , 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for use_next_state_reward in [False]:
-                    for maximize_reward in [False]:
-                        for hard in [False]:
+            for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
+                for use_next_state_reward in [False, True]:
+                    for maximize_reward in [False, True]:
+                        for hard in [False, True]:
                             main(algo, seed,
                                  n_epochs=n_epochs,
                                  use_next_state_reward=use_next_state_reward,
                                  maximize_reward=maximize_reward,
                                  extra_tags=["Learner use_next", "Loadable"],
                                  early_learning=True,
-                                 learner_timesteps=100_000,
-                                 env_name="seals/CartPole-v0",
-                                 override_env_name="CartPole-v1",
+                                 learner_timesteps=1000_000,
+                                 env_name="Pendulum-v1",
+                                 override_env_name="Pendulum-v1",
                                  overrides={"gravity": 15.0},
                                  expert_algo="ppo",
                                  hard=hard,

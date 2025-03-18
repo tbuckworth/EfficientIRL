@@ -336,7 +336,7 @@ class EfficientIRLLossCalculator:
             )
             plt.show()
             plt.scatter(
-                x=obs[:, 2].cpu().numpy(),
+                x=obs[:, 0].cpu().numpy(),
                 y=value_hat.detach().cpu().numpy(),
                 label="Angle vs Value (Cartpole)"
             )
@@ -346,7 +346,7 @@ class EfficientIRLLossCalculator:
                 label="Angle vs Pi (Cartpole)"
             )
             plt.scatter(
-                x=obs[:, 2].cpu().numpy(),
+                x=obs[:, 0].cpu().numpy(),
                 y=reward_hat.detach().cpu().numpy(),
                 label="Angle vs Reward Advantage (Cartpole)"
             )
