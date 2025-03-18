@@ -617,7 +617,10 @@ class IRLFunc(ABC):
         learned_reward = self.learned_reward.squeeze()
         if self.learned_reward.shape == (self.n_states, self.n_actions):
             learned_reward = einops.einsum(self.T, self.learned_reward, "s a ns, s a ->ns")
-        plt.scatter(x=self.true_reward.cpu().numpy(), y=learned_reward.detach().cpu().numpy(), label=self.name)
+        corr = torch.corrcoef(torch.stack((self.true_reward, learned_reward)))[0,1]
+        plt.scatter(x=self.true_reward.cpu().numpy(),
+                    y=learned_reward.detach().cpu().numpy(),
+                    label=f"{self.name} Corr:{corr:.2f}")
         # plt.legend()
         # plt.title(f"{self.name}")
         # plt.show()
@@ -1119,13 +1122,13 @@ def plot_timings(csv_dir):
 
 def main():
     envs = [
+        AscenderLong(n_states=6),
         DogSatMat(),
-        # CustMDP(),
+        CustMDP(),
         # OneStepOther(),
         # OneStep(),
         # DiffParents(),
-        # AscenderLong(n_states=6),
-        # MattGridworld(),
+        MattGridworld(),
     ]
     # envs = [MattGridworld()]
     envs = {e.name: e for e in envs}
