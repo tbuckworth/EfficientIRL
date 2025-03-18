@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+import torch
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
@@ -8,10 +9,11 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 
 import eirl
-from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner
+from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
-from helper_local import import_wandb
+from helper_local import import_wandb, get_config, load_env, get_policy_for
 from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
+
 wandb = import_wandb()
 
 SEED = 42
@@ -88,6 +90,25 @@ class MyTestCase(unittest.TestCase):
         learner = load_ant_sac_learner(wenv, logdir, expert_trainer.policy)
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())
+
+class TestHopperLearner(unittest.TestCase):
+    def setUp(self):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_file = "logs/train/seals/Hopper-v1/2025-03-18__09-08-07__seed_0/model_SUP_50.pth"
+        cfg = get_config(model_file)
+        env_name = cfg["env_name"]
+        n_envs = cfg["n_envs"]
+        seed = cfg["seed"]
+        net_arch = cfg["net_arch"]
+        default_rng, env = load_env(env_name, n_envs, seed)
+        policy = get_policy_for(env.observation_space, env.action_space, net_arch)
+        policy.to(device)
+        policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
+        self.learner = load_ppo_learner(env_name, env, None, policy)
+    def test_hopper(self):
+        self.learner.learn(1000_000)
+
+
 
 if __name__ == '__main__':
     unittest.main()

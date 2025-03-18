@@ -1,29 +1,24 @@
 import os
 import time
 
-import gymnasium as gym
 import numpy as np
 import torch
 from imitation.algorithms import bc
-from imitation.data import rollout, wrappers
-from imitation.data.wrappers import RolloutInfoWrapper
-from imitation.policies.serialize import load_policy
+from imitation.data import wrappers
 from imitation.rewards import reward_wrapper
 from imitation.util import logger as imit_logger
-from imitation.util.util import make_vec_env
-from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, flatten_trajectories, StateDependentStdPolicy
+from helper_local import import_wandb, load_expert_transitions, get_policy_for
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 wandb = import_wandb()
 
 import eirl
-from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_hopper_ppo_learner, load_ppo_learner
+from ant_v1_learner_config import load_ppo_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
@@ -73,23 +68,6 @@ def create_logdir(env_name, seed):
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     return logdir
-
-
-def get_policy_for(observation_space, action_space, net_arch):
-    extractor = (
-        torch_layers.CombinedExtractor
-        if isinstance(observation_space, gym.spaces.Dict)
-        else torch_layers.FlattenExtractor
-    )
-    return StateDependentStdPolicy(
-        observation_space=observation_space,
-        action_space=action_space,
-        # Set lr_schedule to max value to force error if policy.optimizer
-        # is used by mistake (should use self.optimizer instead).
-        lr_schedule=lambda _: torch.finfo(torch.float32).max,
-        features_extractor_class=extractor,
-        net_arch=net_arch,
-    )
 
 
 def main(algo="eirl",
@@ -187,39 +165,6 @@ def main(algo="eirl",
                f'{logdir}/model_RL_{learner_timesteps}.pth')
     # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
     wandb.finish()
-
-
-def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42):
-    default_rng = np.random.default_rng(seed)
-    env = make_vec_env(
-        f"seals:{env_name}",
-        rng=default_rng,
-        n_envs=n_envs,
-        post_wrappers=[
-            lambda env, _: RolloutInfoWrapper(env)
-        ],  # needed for computing rollouts later
-    )
-    expert = load_policy(
-        "sac-huggingface",
-        organization="HumanCompatibleAI",
-        env_name=env_name,
-        venv=env,
-    )
-    expert_rewards, _ = evaluate_policy(
-        expert, env, n_eval_episodes, return_episode_rewards=True
-    )
-    target_rewards = np.mean(expert_rewards)
-    print(f"Target:{target_rewards}")
-
-    expert_rollouts = rollout.rollout(
-        expert,
-        env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=n_expert_demos),
-        rng=default_rng,
-        exclude_infos=False,
-    )
-    expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
-    return default_rng, env, expert_transitions, target_rewards
 
 
 def evaluate(env, expert_trainer, target_rewards, phase, log=False):

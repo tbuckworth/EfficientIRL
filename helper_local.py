@@ -1,6 +1,9 @@
 import json
+import os
+import re
 
-from imitation.data import types
+import gymnasium as gym
+from imitation.data import types, rollout
 from typing import List, Any, Mapping, Iterable, Sequence
 
 import numpy as np
@@ -8,6 +11,11 @@ from imitation.data.types import stack_maybe_dictobs, AnyTensor
 import torch.utils.data as th_data
 import torch
 import torch.nn as nn
+from imitation.data.wrappers import RolloutInfoWrapper
+from imitation.policies.serialize import load_policy
+from imitation.util.util import make_vec_env
+from stable_baselines3.common import torch_layers
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
 
 def import_wandb():
@@ -119,11 +127,73 @@ class StateDependentStdPolicy(ActorCriticPolicy):
         self.log_std_net = nn.Linear(features_dim, action_dim)  # Network for log_std
 
         # Override the default log_std behavior
+        # Remove SB3's existing log_std to avoid conflicts
+        if hasattr(self, "log_std"):
+            del self.log_std  # Explicitly remove the existing log_std
         # self.log_std = None  # Remove the fixed parameter
-        self.log_std = torch.full((action_dim,), float('nan'))
+        self.register_buffer("log_std", torch.full((action_dim,), float("nan")))
 
     def _get_action_dist_from_latent(self, latent_pi):
         mean_actions = self.action_net(latent_pi)
         log_std = self.log_std_net(latent_pi)  # Compute log_std per state
-        std = torch.exp(log_std)  # Convert to standard deviation
-        return self.action_dist.proba_distribution(mean_actions, std)
+        # std = torch.exp(log_std)  # Convert to standard deviation
+        return self.action_dist.proba_distribution(mean_actions, log_std)
+
+def get_config(logdir, pathname="config.npy"):
+    logdir = re.sub(r"model.*\.pth","", logdir)
+    return np.load(os.path.join(logdir, pathname), allow_pickle='TRUE').item()
+
+
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42):
+    default_rng, env = load_env(env_name, n_envs, seed)
+    expert = load_policy(
+        "sac-huggingface",
+        organization="HumanCompatibleAI",
+        env_name=env_name,
+        venv=env,
+    )
+    expert_rewards, _ = evaluate_policy(
+        expert, env, n_eval_episodes, return_episode_rewards=True
+    )
+    target_rewards = np.mean(expert_rewards)
+    print(f"Target:{target_rewards}")
+
+    expert_rollouts = rollout.rollout(
+        expert,
+        env,
+        rollout.make_sample_until(min_timesteps=None, min_episodes=n_expert_demos),
+        rng=default_rng,
+        exclude_infos=False,
+    )
+    expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
+    return default_rng, env, expert_transitions, target_rewards
+
+
+def load_env(env_name, n_envs, seed):
+    default_rng = np.random.default_rng(seed)
+    env = make_vec_env(
+        f"seals:{env_name}",
+        rng=default_rng,
+        n_envs=n_envs,
+        post_wrappers=[
+            lambda env, _: RolloutInfoWrapper(env)
+        ],  # needed for computing rollouts later
+    )
+    return default_rng, env
+
+
+def get_policy_for(observation_space, action_space, net_arch):
+    extractor = (
+        torch_layers.CombinedExtractor
+        if isinstance(observation_space, gym.spaces.Dict)
+        else torch_layers.FlattenExtractor
+    )
+    return StateDependentStdPolicy(
+        observation_space=observation_space,
+        action_space=action_space,
+        # Set lr_schedule to max value to force error if policy.optimizer
+        # is used by mistake (should use self.optimizer instead).
+        lr_schedule=lambda _: torch.finfo(torch.float32).max,
+        features_extractor_class=extractor,
+        net_arch=net_arch,
+    )
