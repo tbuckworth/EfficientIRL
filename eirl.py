@@ -253,6 +253,9 @@ class EfficientIRLLossCalculator:
 
         prob_true_act = th.exp(log_prob).mean()
 
+        if dones.any():
+            pass
+
         l2_norms = [th.sum(th.square(w)) for w in policy.parameters()]
         l2_norm = sum(l2_norms) / 2  # divide by 2 to cancel with gradient of square
         # sum of list defaults to float(0) if len == 0.
@@ -315,6 +318,30 @@ class EfficientIRLLossCalculator:
             plt.scatter(
                 x=norm(rews).cpu().numpy(),
                 y=norm(dl).detach().cpu().numpy(),
+            )
+            plt.show()
+
+            flt = acts == 0
+            plt.scatter(
+                x=obs[flt,2].cpu().numpy(),
+                y=reward_hat[flt].detach().cpu().numpy(),
+                label="Angle vs Rewards (Cartpole)"
+            )
+            plt.show()
+            plt.scatter(
+                x=obs[:, 2].cpu().numpy(),
+                y=value_hat.detach().cpu().numpy(),
+                label="Angle vs Value (Cartpole)"
+            )
+            plt.scatter(
+                x=obs[:, 2].cpu().numpy(),
+                y=log_prob.detach().cpu().numpy(),
+                label="Angle vs Pi (Cartpole)"
+            )
+            plt.scatter(
+                x=obs[:, 0].cpu().numpy(),
+                y=reward_hat.detach().cpu().numpy(),
+                label="Angle vs Reward Advantage (Cartpole)"
             )
             plt.show()
 

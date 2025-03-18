@@ -214,7 +214,7 @@ if __name__ == "__main__":
         for n_epochs in [20]:
             for seed in [0]:#, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for use_next_state_reward in [True]:
-                    for maximize_reward in [True]:
+                    for maximize_reward in [False]:
                         for hard in [False, True]:
                             main(algo, seed,
                                  n_epochs=n_epochs,
