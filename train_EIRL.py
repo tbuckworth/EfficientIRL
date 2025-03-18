@@ -226,17 +226,18 @@ if __name__ == "__main__":
                 for use_next_state_reward in [False, True]:
                     for maximize_reward in [False, True]:
                         for hard in [False, True]:
-                            main(algo, seed,
-                                 n_epochs=n_epochs,
-                                 use_next_state_reward=use_next_state_reward,
-                                 maximize_reward=maximize_reward,
-                                 extra_tags=["Learner use_next", "Loadable"],
-                                 early_learning=True,
-                                 learner_timesteps=1000_000,
-                                 env_name="Pendulum-v1",
-                                 override_env_name="Pendulum-v1",
-                                 overrides={"gravity": 15.0},
-                                 expert_algo="ppo",
-                                 hard=hard,
-                                 enforce_rew_val_consistency=True,
-                                 )
+                            for enforce_rew_val_consistency in [False, True]:
+                                main(algo, seed,
+                                     n_epochs=n_epochs,
+                                     use_next_state_reward=use_next_state_reward,
+                                     maximize_reward=maximize_reward,
+                                     extra_tags=["Pendulum"],
+                                     early_learning=False,
+                                     learner_timesteps=1000_000,
+                                     env_name="Pendulum-v1",
+                                     override_env_name="Pendulum-v1",
+                                     overrides={"gravity": 15.0},
+                                     expert_algo="ppo",
+                                     hard=hard,
+                                     enforce_rew_val_consistency=enforce_rew_val_consistency,
+                                     )
