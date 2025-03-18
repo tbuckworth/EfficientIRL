@@ -214,7 +214,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [20]:
+        for n_epochs in [50]:
             for seed in [0]:  # , 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for use_next_state_reward in [False]:
                     for maximize_reward in [False]:
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                                  maximize_reward=maximize_reward,
                                  extra_tags=["Learner use_next", "Loadable"],
                                  early_learning=True,
-                                 learner_timesteps=1000_000,
+                                 learner_timesteps=100_000,
                                  env_name="seals/CartPole-v0",
                                  override_env_name="CartPole-v1",
                                  overrides={"gravity": 15.0},

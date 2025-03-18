@@ -106,7 +106,7 @@ def get_latest_model(folder, keyword):
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logdir = "logs/train/seals/CartPole-v0/2025-03-18__17-35-58__seed_0"
+        logdir = "logs/train/seals/CartPole-v0/2025-03-18__17-47-29__seed_0"
         model_file = get_latest_model(logdir, "SUP")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
