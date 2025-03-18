@@ -202,15 +202,15 @@ def load_cartpole_ppo_learner(wenv, logdir, policy):
                  ('normalize', False)])
 
     params = dict(
-        policy=policy,
+        policy='MlpPolicy',
         env=wenv,
-        learning_rate='lin_0.001',
+        learning_rate=0.001,
         n_steps=32,
         batch_size=256,
         n_epochs=20,
         gamma=0.98,
         gae_lambda=0.8,
-        clip_range='lin_0.2',
+        clip_range=0.2,
         clip_range_vf=None,
         normalize_advantage=True,
         ent_coef=0,
@@ -232,6 +232,7 @@ def load_cartpole_ppo_learner(wenv, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**params)
+    learner.policy = policy
     return learner
 
 
@@ -240,6 +241,6 @@ def load_ppo_learner(env_name, wenv, logdir, policy):
         return load_hopper_ppo_learner(wenv, logdir, policy)
     if env_name == "seals/Ant-v1":
         return load_ant_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals/CartPole-v1":
+    if env_name == "seals/CartPole-v0":
         return load_cartpole_ppo_learner(wenv, logdir, policy)
     raise NotImplementedError

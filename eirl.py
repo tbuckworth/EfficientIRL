@@ -183,6 +183,7 @@ class EfficientIRLLossCalculator:
             ],
             dones: Union[th.Tensor, np.ndarray],
             rews: Union[th.Tensor, np.ndarray] = None,
+            one_hot_acts: Union[th.Tensor, np.ndarray] = None,
     ) -> EIRLTrainingMetrics:
         """Calculate the supervised learning loss used to train the behavioral clone.
 
@@ -216,7 +217,7 @@ class EfficientIRLLossCalculator:
 
         if self.use_next_state_reward:
             # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
-            sa_rew_hat = reward_func(obs, acts, None, None)
+            sa_rew_hat = reward_func(obs, one_hot_acts, None, None)
             # This only uses next states:
             ns_rew_hat = state_reward_func(obs, None, nobs, None)
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
@@ -228,7 +229,7 @@ class EfficientIRLLossCalculator:
             loss3 = 0
 
         if self.log_prob_adj_reward:
-            lp_rew = lp_adj_reward(obs, acts, None, None)
+            lp_rew = lp_adj_reward(obs, one_hot_acts, None, None)
             target = reward_hat.detach() -log_prob.detach()
             lp_loss = (lp_rew-target).pow(2).mean()
         else:
@@ -732,10 +733,13 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             rews = None
             if "rews" in batch.keys():
                 rews = util.safe_to_tensor(batch["rews"], device=self.policy.device)
+            one_hot_acts = None
+            if isinstance(self.action_space, gym.spaces.Discrete):
+                one_hot_acts = th.nn.functional.one_hot(acts, self.action_space.n).to(device=self.policy.device)
 
             training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func,
                                                     self.lp_adj_reward, obs_tensor,
-                                                    acts, nobs_tensor, dones, rews)
+                                                    acts, nobs_tensor, dones, rews, one_hot_acts)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.

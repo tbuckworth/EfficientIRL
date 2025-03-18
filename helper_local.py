@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
+from imitation.policies import base as policy_base
 from imitation.util.util import make_vec_env
 from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -188,6 +189,16 @@ def get_policy_for(observation_space, action_space, net_arch):
         if isinstance(observation_space, gym.spaces.Dict)
         else torch_layers.FlattenExtractor
     )
+    if isinstance(action_space, gym.spaces.Discrete):
+        return ActorCriticPolicy(
+            observation_space=observation_space,
+            action_space=action_space,
+            # Set lr_schedule to max value to force error if policy.optimizer
+            # is used by mistake (should use self.optimizer instead).
+            lr_schedule=lambda _: torch.finfo(torch.float32).max,
+            features_extractor_class=extractor,
+            net_arch=net_arch,
+        )
     return StateDependentStdPolicy(
         observation_space=observation_space,
         action_space=action_space,

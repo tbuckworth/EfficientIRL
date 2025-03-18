@@ -2,6 +2,7 @@ import os
 import re
 import time
 
+import gymnasium as gym
 import numpy as np
 import torch
 from imitation.algorithms import bc
@@ -24,6 +25,8 @@ from ant_v1_learner_config import load_ppo_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
+    is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    n_actions = env.action_space.n
     def predict_processed(
             state: np.ndarray,
             action: np.ndarray,
@@ -35,7 +38,10 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., )
 
         with torch.no_grad():
             obs = torch.FloatTensor(state).to(device=reward_func.device)
-            acts = torch.FloatTensor(action).to(device=reward_func.device)
+            if is_discrete:
+                acts = torch.nn.functional.one_hot(torch.LongTensor(action), n_actions).to(device=reward_func.device)
+            else:
+                acts = torch.FloatTensor(action).to(device=reward_func.device)
             rew = reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
             if neg_reward:
                 return -rew
@@ -205,7 +211,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [100]:
+        for n_epochs in [20]:
             for seed in [0]:#, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
                 for use_next_state_reward in [True]:
                     for maximize_reward in [True]:
