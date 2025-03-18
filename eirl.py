@@ -98,6 +98,7 @@ class EIRLTrainingMetrics:
     l2_loss: th.Tensor
     loss: th.Tensor
     reward_correl: th.Tensor
+    weighted_reward: Optional[th.Tensor]
 
 
 def get_latents(policy, obs):
@@ -157,6 +158,7 @@ class EfficientIRLLossCalculator:
     consistency_coef: float
     hard: bool
     use_next_state_reward: bool
+    maximize_reward: bool
 
     def __call__(
             self,
@@ -217,11 +219,18 @@ class EfficientIRLLossCalculator:
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
             # This is optional, just trying to maximize the probability of rewards under the policy.
-            loss4 = -(reward_hat * log_prob).mean()
-            loss3 = rew_cons_loss + loss4
+            # loss4 = -(reward_hat * log_prob).mean()
+            # trying another crazy idea:
+            # loss4 = -reward_hat.mean()
+            loss3 = rew_cons_loss
         else:
             reward_hat = reward_func(obs, None, None, None)
             loss3 = 0
+
+        if self.maximize_reward:
+            loss4 = -(reward_hat * log_prob).mean()
+        else:
+            loss4 = 0
 
         next_value_hat = policy.predict_values(nobs).squeeze()
 
@@ -247,7 +256,7 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + loss2 * self.consistency_coef + loss3 * self.consistency_coef + l2_loss
+        loss = loss1 + (loss2 + loss3 + loss4) * self.consistency_coef + l2_loss
 
         reward_correl = None
         if rews is not None:
@@ -259,8 +268,8 @@ class EfficientIRLLossCalculator:
                 a = arr - arr.min()
                 return a / a.max()
 
-            d = reward_advantage.exp()/(reward_advantage.exp()+log_prob.exp())
-            dl = d.log() - (1-d).log()
+            d = reward_advantage.exp() / (reward_advantage.exp() + log_prob.exp())
+            dl = d.log() - (1 - d).log()
 
             norm_rew = norm(rews).cpu().numpy()
             plt.scatter(
@@ -296,8 +305,8 @@ class EfficientIRLLossCalculator:
             plt.show()
 
             plt.scatter(
-                x=reward_hat.detach().cpu().numpy(),
-                y=d.detach().cpu().numpy(),
+                x=norm(rews).cpu().numpy(),
+                y=norm(reward_hat + entropy).detach().cpu().numpy(),
             )
             plt.show()
 
@@ -310,6 +319,7 @@ class EfficientIRLLossCalculator:
             l2_norm=l2_norm,
             l2_loss=l2_loss,
             loss=loss,
+            weighted_reward=loss4,
             reward_correl=reward_correl,
         )
 
@@ -451,7 +461,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             hard=True,
             gamma=0.99,
             use_next_state_reward=True,
-    ):
+            maximize_reward=False):
         """Builds EIRL.
 
         Args:
@@ -561,7 +571,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             **optimizer_kwargs,
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
-                                                          use_next_state_reward)
+                                                          use_next_state_reward, maximize_reward)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:

@@ -6,7 +6,9 @@ from typing import List, Any, Mapping, Iterable, Sequence
 import numpy as np
 from imitation.data.types import stack_maybe_dictobs, AnyTensor
 import torch.utils.data as th_data
-
+import torch
+import torch.nn as nn
+from stable_baselines3.common.policies import ActorCriticPolicy
 
 def import_wandb():
     try:
@@ -102,3 +104,25 @@ def load_json(file_json="your_file.json"):
     with open(file_json, "r") as file:
         data = json.load(file)
     return data
+
+
+
+
+
+class StateDependentStdPolicy(ActorCriticPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Replace SB3's fixed log_std with a network predicting log_std per state
+        action_dim = self.action_dist.proba_distribution._param_shape[0]
+
+        self.log_std_net = nn.Linear(self.features_dim, action_dim)  # Network for log_std
+
+        # Override the default log_std behavior
+        self.log_std = None  # Remove the fixed parameter
+
+    def _get_action_dist_from_latent(self, latent_pi):
+        mean_actions = self.action_net(latent_pi)
+        log_std = self.log_std_net(latent_pi)  # Compute log_std per state
+        std = torch.exp(log_std)  # Convert to standard deviation
+        return self.action_dist.proba_distribution(mean_actions, std)

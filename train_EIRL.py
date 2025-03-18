@@ -1,6 +1,8 @@
 import os
 import time
 
+
+import gymnasium as gym
 import numpy as np
 import torch
 from imitation.algorithms import bc
@@ -10,12 +12,13 @@ from imitation.policies.serialize import load_policy
 from imitation.rewards import reward_wrapper
 from imitation.util import logger as imit_logger
 from imitation.util.util import make_vec_env
+from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, flatten_trajectories
+from helper_local import import_wandb, flatten_trajectories, StateDependentStdPolicy
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 wandb = import_wandb()
@@ -73,10 +76,28 @@ def create_logdir(env_name, seed):
     return logdir
 
 
+def get_policy_for(observation_space, action_space, net_arch):
+    extractor = (
+        torch_layers.CombinedExtractor
+        if isinstance(observation_space, gym.spaces.Dict)
+        else torch_layers.FlattenExtractor
+    )
+    return StateDependentStdPolicy(
+        observation_space=observation_space,
+        action_space=action_space,
+        # Set lr_schedule to max value to force error if policy.optimizer
+        # is used by mistake (should use self.optimizer instead).
+        lr_schedule=lambda _: torch.finfo(torch.float32).max,
+        features_extractor_class=extractor,
+        net_arch=net_arch,
+    )
+
+
 def main(algo="eirl", seed=42, hard=True,
-         consistency_coef=100., n_epochs=20):
+         consistency_coef=100., n_epochs=20, model_file=None):
     use_next_state_reward = True
     neg_reward = False
+    maximize_reward = False
     rew_const_adj = 0
     learner_timesteps = 1000_000
     gamma = 0.995
@@ -87,19 +108,25 @@ def main(algo="eirl", seed=42, hard=True,
     n_eval_episodes = 50
     n_envs = 16
     n_expert_demos = 60
+    net_arch = [64, 64]
 
     env_name = "seals/Hopper-v1"
 
     tags = ["HopperComp", "Fixed Entropy", "PPO", "NEXT STATE BASED"]
     logdir = create_logdir(env_name, seed)
-
+    np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
                                                                                    n_expert_demos, seed)
 
+    policy = get_policy_for(env.observation_space, env.action_space, net_arch)
+    if model_file is not None:
+        policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
+
     if algo == "eirl":
         expert_trainer = eirl.EIRL(
+            policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
@@ -113,6 +140,7 @@ def main(algo="eirl", seed=42, hard=True,
             optimizer_cls=torch.optim.Adam,
             optimizer_kwargs={"lr": lr},
             use_next_state_reward=use_next_state_reward,
+            maximize_reward=maximize_reward,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(
@@ -128,11 +156,15 @@ def main(algo="eirl", seed=42, hard=True,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")
-
+    epoch = None
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment, progress_bar=False)
         mean_rew, per_expert, std_err = evaluate(env, expert_trainer, target_rewards, phase="supervised", log=True)
-        print(f"Epoch:{(i + 1) * increment}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+        epoch = (i + 1) * increment
+        print(f"Epoch:{epoch}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
+    if epoch is not None:
+        torch.save({'model_state_dict': expert_trainer.policy.state_dict()},
+                   f'{logdir}/model_SUP_{epoch}.pth')
     if learner_timesteps == 0:
         wandb.finish()
         return
@@ -142,6 +174,8 @@ def main(algo="eirl", seed=42, hard=True,
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement",log=True)
+    torch.save({'model_state_dict': learner.policy.state_dict()},
+               f'{logdir}/model_RL_{learner_timesteps}.pth')
     # print(f"Timesteps:{learner_timesteps}\tMeanRewards:{mean_rew:.1f}\tStdError:{std_err:.2f}\tRatio{per_expert:.2f}")
     wandb.finish()
 
