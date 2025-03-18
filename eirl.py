@@ -92,6 +92,7 @@ class EIRLTrainingMetrics:
     kl_loss: th.Tensor
     entropy: Optional[th.Tensor]
     reward_loss: Optional[th.Tensor]
+    log_prob_rew_loss: Optional[th.Tensor]
     consistency_loss: th.Tensor
     prob_true_act: th.Tensor
     l2_norm: th.Tensor
@@ -159,12 +160,14 @@ class EfficientIRLLossCalculator:
     hard: bool
     use_next_state_reward: bool
     maximize_reward: bool
+    log_prob_adj_reward: bool
 
     def __call__(
             self,
             policy: policies.ActorCriticPolicy,
             reward_func: RewardNet,
             state_reward_func: RewardNet,
+            lp_adj_reward: RewardNet,
             obs: Union[
                 types.AnyTensor,
                 types.DictObs,
@@ -227,6 +230,13 @@ class EfficientIRLLossCalculator:
             reward_hat = reward_func(obs, None, None, None)
             loss3 = 0
 
+        if self.log_prob_adj_reward:
+            lp_rew = lp_adj_reward(obs, acts, None, None)
+            target = reward_hat.detach() -log_prob.detach()
+            lp_loss = (lp_rew-target).pow(2).mean()
+        else:
+            lp_loss = 0
+
         if self.maximize_reward:
             loss4 = -(reward_hat * log_prob).mean()
         else:
@@ -256,7 +266,7 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + (loss2 + loss3 + loss4) * self.consistency_coef + l2_loss
+        loss = loss1 + (loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss
 
         reward_correl = None
         if rews is not None:
@@ -314,6 +324,7 @@ class EfficientIRLLossCalculator:
             kl_loss=loss1,
             consistency_loss=loss2,
             reward_loss=loss3,
+            log_prob_rew_loss=lp_loss,
             entropy=entropy.mean(),
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
@@ -461,7 +472,9 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             hard=True,
             gamma=0.99,
             use_next_state_reward=True,
-            maximize_reward=False):
+            maximize_reward=False,
+            log_prob_adj_reward=False,
+    ):
         """Builds EIRL.
 
         Args:
@@ -526,6 +539,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 lr_schedule=lambda _: th.finfo(th.float32).max,
                 features_extractor_class=extractor,
             )
+        self.lp_adj_reward = self.state_reward_func = None
         if reward_func is None:
             if preprocessing.is_image_space(observation_space):
                 reward_constructor = CnnRewardNet
@@ -554,8 +568,14 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                                                  use_action=False,
                                                  use_next_state=False,
                                                  use_done=False, )
-                self.state_reward_func = None
-
+            if log_prob_adj_reward:
+                lp_adj_reward = reward_constructor(observation_space=observation_space,
+                                                   action_space=action_space,
+                                                   use_state=True,
+                                                   use_action=True,
+                                                   use_next_state=False,
+                                                   use_done=False, )
+                self.lp_adj_reward = lp_adj_reward.to(utils.get_device(device))
         self.reward_func = reward_func.to(utils.get_device(device))
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
@@ -571,7 +591,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             **optimizer_kwargs,
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
-                                                          use_next_state_reward, maximize_reward)
+                                                          use_next_state_reward, maximize_reward, log_prob_adj_reward)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
@@ -716,7 +736,8 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             if "rews" in batch.keys():
                 rews = util.safe_to_tensor(batch["rews"], device=self.policy.device)
 
-            training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func, obs_tensor,
+            training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func,
+                                                    self.lp_adj_reward, obs_tensor,
                                                     acts, nobs_tensor, dones, rews)
 
             # Renormalise the loss to be averaged over the whole

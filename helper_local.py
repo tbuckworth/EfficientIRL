@@ -114,12 +114,13 @@ class StateDependentStdPolicy(ActorCriticPolicy):
         super().__init__(*args, **kwargs)
 
         # Replace SB3's fixed log_std with a network predicting log_std per state
-        action_dim = self.action_dist.proba_distribution._param_shape[0]
-
-        self.log_std_net = nn.Linear(self.features_dim, action_dim)  # Network for log_std
+        action_dim = self.action_dist.action_dim
+        features_dim = kwargs["net_arch"][-1]
+        self.log_std_net = nn.Linear(features_dim, action_dim)  # Network for log_std
 
         # Override the default log_std behavior
-        self.log_std = None  # Remove the fixed parameter
+        # self.log_std = None  # Remove the fixed parameter
+        self.log_std = torch.full((action_dim,), float('nan'))
 
     def _get_action_dist_from_latent(self, latent_pi):
         mean_actions = self.action_net(latent_pi)

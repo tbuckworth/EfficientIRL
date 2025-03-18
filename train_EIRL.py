@@ -96,6 +96,7 @@ def get_policy_for(observation_space, action_space, net_arch):
 def main(algo="eirl", seed=42, hard=True,
          consistency_coef=100., n_epochs=20, model_file=None):
     use_next_state_reward = True
+    log_prob_adj_reward = False
     neg_reward = False
     maximize_reward = False
     rew_const_adj = 0
@@ -141,6 +142,7 @@ def main(algo="eirl", seed=42, hard=True,
             optimizer_kwargs={"lr": lr},
             use_next_state_reward=use_next_state_reward,
             maximize_reward=maximize_reward,
+            log_prob_adj_reward=log_prob_adj_reward,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(
@@ -168,8 +170,11 @@ def main(algo="eirl", seed=42, hard=True,
     if learner_timesteps == 0:
         wandb.finish()
         return
-
-    wenv = wrap_env_with_reward(env, expert_trainer.reward_func, neg_reward, rew_const_adj)
+    if log_prob_adj_reward:
+        rfunc = expert_trainer.lp_adj_reward
+    else:
+        rfunc = expert_trainer.reward_func
+    wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
     learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
