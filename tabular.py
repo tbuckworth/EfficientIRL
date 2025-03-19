@@ -479,7 +479,7 @@ class TabularMDP:
                 irl_object.display_rewards()
             plt.legend()
             plt.title(f"Learned rewards for {p_name} Policy in {self.name}")
-            plt.savefig(f"data/tabular_plots/alt/{self.name}_{p_name}_policy2.png")
+            plt.savefig(f"data/tabular_plots/alt/{self.name}_{p_name}_policy.png")
             plt.show()
 
     def calc_irls(self, verbose=False, time_it=False, atol=1e-5):
@@ -611,13 +611,15 @@ class IRLFunc(ABC):
     def calculate_loss(self):
         raise NotImplementedError("calculate_loss is an abstract method. It must be overidden.")
 
+    def get_state_based_learned_reward(self):
+        raise NotImplementedError("get_state_based_learned_reward is an abstract method. It must be overidden.")
+
     def display_rewards(self):
-        # TODO: finish this off:
-        # if state_action_reward:
         learned_reward = self.learned_reward.squeeze()
         if self.learned_reward.shape == (self.n_states, self.n_actions):
             learned_reward = einops.einsum(self.T, self.learned_reward, "s a ns, s a ->ns")
-        corr = torch.corrcoef(torch.stack((self.true_reward, learned_reward)))[0,1]
+        learned_reward = self.get_state_based_learned_reward()
+        corr = torch.corrcoef(torch.stack((self.true_reward, learned_reward)))[0, 1]
         plt.scatter(x=self.true_reward.cpu().numpy(),
                     y=learned_reward.detach().cpu().numpy(),
                     label=f"{self.name} Corr:{corr:.2f}")
@@ -627,6 +629,7 @@ class IRLFunc(ABC):
         print(f"{self.name}")
         print(learned_reward)
         print(self.true_reward)
+
 
 class AlternativeEIRL(IRLFunc):
     def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
@@ -657,6 +660,48 @@ class AlternativeEIRL(IRLFunc):
         loss3 = log_pi_target.pow(2).mean()
         loss = loss1 + loss2 * self.consistency_coef + loss3
         return loss
+
+    def get_state_based_learned_reward(self):
+        return einops.einsum(self.T, self.learned_reward, "s a ns, s a ->ns")
+
+
+class NextStateEIRL(IRLFunc):
+    def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
+                 suppress=False,
+                 atol=1e-5,
+                 state_based=False, soft=True):
+        self.consistency_coef = 10.
+        n_states, n_actions, _ = T.shape
+        self.learned_log_pi = torch.randn((n_states, n_actions), requires_grad=True, device=device)
+        self.learned_reward = torch.randn((n_states, 1), requires_grad=True, device=device)
+        self.learned_value = torch.randn((n_states,), requires_grad=True, device=device)
+
+        self.param_list = [self.learned_log_pi, self.learned_reward, self.learned_value]
+        self.name = "Next State EIRL"
+        super().__init__(pi, T, true_reward, mu, n_iterations, lr, print_losses, device, suppress, atol, state_based,
+                         soft)
+
+    def calculate_loss(self):
+        log_pi_theta = self.learned_log_pi.log_softmax(dim=-1)
+        actor_adv = log_pi_theta
+        if not self.soft:
+            # Adding entropy makes it hard advantage
+            actor_adv = log_pi_theta - (log_pi_theta.exp() * log_pi_theta).sum(dim=-1).unsqueeze(dim=-1)
+
+        next_value = einops.einsum(self.T, self.learned_value, "s a ns, ns -> s a")
+        reward_hat = einops.einsum(self.T, self.learned_reward.squeeze(), "s a ns, ns -> s a")
+        q_hat = reward_hat + GAMMA * next_value
+
+        reward_adv = q_hat - self.learned_value.unsqueeze(-1)
+
+        loss1 = -(self.pi * log_pi_theta).mean()
+        loss2 = (actor_adv - reward_adv).pow(2).mean()
+        loss = loss1 + loss2 * self.consistency_coef
+        return loss
+
+    def get_state_based_learned_reward(self):
+        return self.learned_reward.squeeze()  # einops.einsum(self.T, self.learned_reward, "s a ns, ns ->ns")
+
 
 class DisentangledEIRL(IRLFunc):
     def __init__(self, pi, T, true_reward, mu=None, n_iterations=10000, lr=1e-1, print_losses=False, device="cpu",
@@ -695,6 +740,9 @@ class DisentangledEIRL(IRLFunc):
         loss = loss1 + loss2 * self.consistency_coef
         return loss
 
+    def get_state_based_learned_reward(self):
+        return einops.einsum(self.T, self.learned_reward, "s a ns, s a ->ns")
+
 
 class StateBasedDisentangledEIRL(DisentangledEIRL):
     def __init__(self, *args, **kwargs):
@@ -702,15 +750,19 @@ class StateBasedDisentangledEIRL(DisentangledEIRL):
         super().__init__(*args, **kwargs)
         self.name = "State Based Disentangled EIRL"
 
+    def get_state_based_learned_reward(self):
+        return self.learned_reward.squeeze()
+
+
 class HardDisentangledEIRL(DisentangledEIRL):
     def __init__(self, *args, **kwargs):
         kwargs["soft"] = False
         super().__init__(*args, **kwargs)
         self.name = "Hard Disentangled EIRL"
 
-class HardStateBasedDisentangledEIRL(DisentangledEIRL):
+
+class HardStateBasedDisentangledEIRL(StateBasedDisentangledEIRL):
     def __init__(self, *args, **kwargs):
-        kwargs["state_based"] = True
         kwargs["soft"] = False
         super().__init__(*args, **kwargs)
         self.name = "Hard State Based Disentangled EIRL"
@@ -1016,6 +1068,7 @@ irl_funcs = {
     # "Alternative EIRL": AlternativeEIRL,
     "Disentangled EIRL": DisentangledEIRL,
     "State Based Disentangled EIRL": StateBasedDisentangledEIRL,
+    "Next State Disentangled EIRL": NextStateEIRL,
     # "Hard Disentangled EIRL": HardDisentangledEIRL,
     # "Hard State Based Disentangled EIRL": HardStateBasedDisentangledEIRL,
     # "Next Value EIRL": NextValEIRL,
@@ -1152,10 +1205,10 @@ def plot_timings(csv_dir):
 
 def main():
     envs = [
-        # AscenderLong(n_states=6),
-        # MattGridworld(),
-        # DogSatMat(),
-        # CustMDP(),
+        MattGridworld(),
+        AscenderLong(n_states=6),
+        DogSatMat(),
+        CustMDP(),
         # OneStepOther(),
         OneStep(),
         # DiffParents(),
