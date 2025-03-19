@@ -170,7 +170,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
     return default_rng, env, expert_transitions, target_rewards
 
 
-def load_env(env_name, n_envs, seed):
+def load_env(env_name, n_envs, seed, env_make_kwargs=None):
     default_rng = np.random.default_rng(seed)
     env = make_vec_env(
         f"{env_name}",
@@ -179,6 +179,7 @@ def load_env(env_name, n_envs, seed):
         post_wrappers=[
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
+        env_make_kwargs=env_make_kwargs
     )
     return default_rng, env
 

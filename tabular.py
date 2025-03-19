@@ -1013,7 +1013,7 @@ class MattGridworld(TabularMDP):
 irl_func_list = [DisentangledEIRL, NextValEIRL]
 
 irl_funcs = {
-    "Alternative EIRL": AlternativeEIRL,
+    # "Alternative EIRL": AlternativeEIRL,
     "Disentangled EIRL": DisentangledEIRL,
     "State Based Disentangled EIRL": StateBasedDisentangledEIRL,
     # "Hard Disentangled EIRL": HardDisentangledEIRL,
@@ -1152,12 +1152,12 @@ def plot_timings(csv_dir):
 
 def main():
     envs = [
-        AscenderLong(n_states=6),
-        MattGridworld(),
-        DogSatMat(),
-        CustMDP(),
+        # AscenderLong(n_states=6),
+        # MattGridworld(),
+        # DogSatMat(),
+        # CustMDP(),
         # OneStepOther(),
-        # OneStep(),
+        OneStep(),
         # DiffParents(),
 
     ]

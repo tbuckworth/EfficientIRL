@@ -272,14 +272,51 @@ def load_pendulum_ppo_learner(wenv, logdir, policy):
     return learner
 
 
+def load_mountaincar_ppo_learner(wenv, logdir, policy):
+    params = dict(
+        policy='MlpPolicy',
+        env=wenv,
+        learning_rate=0.0004476103728105138,
+        n_steps=256,
+        batch_size=512,
+        n_epochs=20,
+        gamma=0.99,
+        gae_lambda=0.98,
+        clip_range=0.2,
+        clip_range_vf=None,
+        normalize_advantage=False,
+        ent_coef=6.4940755116195606e-06,
+        vf_coef=0.25988158989488963,
+        max_grad_norm=1.,
+        use_sde=False,  # not sure if best
+        # sde_sample_freq=4,
+        rollout_buffer_class=None,
+        rollout_buffer_kwargs=None,
+        target_kl=None,
+        stats_window_size=100,
+        tensorboard_log=logdir,
+        # policy_kwargs={'activation_fn': torch.nn.modules.activation.ReLU,
+        #                'features_extractor_class': NormalizeFeaturesExtractor,
+        #                'net_arch': [{'pi': [64, 64], 'vf': [64, 64]}]},
+        verbose=0,
+        seed=None,
+        device="auto",
+        _init_setup_model=True,
+    )
+    learner = PPO(**params)
+    learner.policy = policy
+    return learner
+
 
 def load_ppo_learner(env_name, wenv, logdir, policy):
-    if env_name == "seals/Hopper-v1":
+    if env_name == "seals:seals/Hopper-v1":
         return load_hopper_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals/Ant-v1":
+    if env_name == "seals:seals/Ant-v1":
         return load_ant_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals/CartPole-v0":
+    if env_name == "seals:seals/CartPole-v0":
         return load_cartpole_ppo_learner(wenv, logdir, policy)
     if env_name == "Pendulum-v1":
         return load_pendulum_ppo_learner(wenv, logdir, policy)
+    if env_name == "seals:seals/MountainCar-v0":
+        return load_mountaincar_ppo_learner(wenv, logdir, policy)
     raise NotImplementedError

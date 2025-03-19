@@ -9,6 +9,7 @@ from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.policies import ActorCriticPolicy
 
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
@@ -106,15 +107,15 @@ def get_latest_model(folder, keyword):
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logdir = "logs/train/seals/CartPole-v0/2025-03-18__17-47-29__seed_0"
-        model_file = get_latest_model(logdir, "SUP")
+        logdir = "logs/train/seals:seals/MountainCar-v0/2025-03-19__07-57-24__seed_0"
+        model_file = get_latest_model(logdir, "RL")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
         seed = cfg["seed"]
         net_arch = cfg["net_arch"]
         # net_arch = [32, 32]
-        default_rng, env = load_env(env_name, n_envs, seed)
+        default_rng, env = load_env(env_name, n_envs, seed, {"render_mode":"human"})
         policy = get_policy_for(env.observation_space, env.action_space, net_arch)
         policy.to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
@@ -122,6 +123,26 @@ class TestHopperLearner(unittest.TestCase):
         self.policy = policy
         self.cfg = cfg
         self.model_file = model_file
+        self.env = env
+
+    def test_render(self):
+        obs = self.env.reset()
+        for _ in range(1000):
+            # Sample a random action
+            with torch.no_grad():
+                action = self.policy._predict(torch.FloatTensor(obs).to(device=self.policy.device))
+
+            # Step the environment
+            obs, reward, done, info = self.env.step(action.cpu().numpy())
+
+            # Render the *first* (index 0) sub-environment
+            # This calls the 'render()' of the underlying gym environment
+            self.env.envs[0].render()
+
+            # Optionally reset if done
+            if done[0]:
+                self.env.reset()
+
 
     def test_learner(self):
         self.learner.learn(1000_000)

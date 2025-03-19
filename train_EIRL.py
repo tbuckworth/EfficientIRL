@@ -217,6 +217,7 @@ env_names = [
     "seals:seals/Cartpole-v0",
     "seals:seals/Hopper-v1",
     "seals:seals/Ant-v1",
+    "seals:seals/MountainCar-v0",
 ]
 
 if __name__ == "__main__":
@@ -231,12 +232,12 @@ if __name__ == "__main__":
                                      n_epochs=n_epochs,
                                      use_next_state_reward=use_next_state_reward,
                                      maximize_reward=maximize_reward,
-                                     extra_tags=["Pendulum"],
+                                     extra_tags=["MountainCar"],
                                      early_learning=False,
                                      learner_timesteps=1000_000,
-                                     env_name="Pendulum-v1",
-                                     override_env_name="Pendulum-v1",
-                                     overrides={"gravity": 15.0},
+                                     env_name="seals:seals/MountainCar-v0",
+                                     override_env_name=None,#"MountainCar-v0",
+                                     overrides=None,#{"gravity": 15.0},
                                      expert_algo="ppo",
                                      hard=hard,
                                      enforce_rew_val_consistency=enforce_rew_val_consistency,
