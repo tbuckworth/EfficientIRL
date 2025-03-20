@@ -108,8 +108,10 @@ def trainEIRL(algo="eirl",
               expert_algo="sac",
               override_env_name=None,
               enforce_rew_val_consistency=True,
-              norm_reward=True):
-    net_arch = [32, 32]
+              norm_reward=True,
+              net_arch=None):
+    if net_arch is None:
+        net_arch = [256, 256, 256, 256]
 
     tags = [] + (extra_tags if extra_tags is not None else [])
     logdir = create_logdir(env_name, seed)
