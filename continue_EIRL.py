@@ -55,11 +55,12 @@ def main(model_dir, run_from, epochs, tags):
 
     if run_from == "RL":
         for i in range(epochs):
-            learner = load_ppo_learner(env_name, env, logdir, policy)
+            learner = load_ppo_learner(env_name, wenv, logdir, policy)
             mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
             learner.learn(total_timesteps=1000_000)
     else:
         raise NotImplementedError
+    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     env.close()
     wandb.finish()
 
