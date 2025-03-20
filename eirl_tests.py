@@ -169,14 +169,14 @@ class TestHopperLearner(unittest.TestCase):
             l2_weight=self.cfg["l2_weight"],
             optimizer_cls=torch.optim.Adam,
             optimizer_kwargs={"lr": self.cfg["lr"]},
-            use_next_state_reward=self.cfg["use_next_state_reward"],
+            reward_type=self.cfg["reward_type"],
             maximize_reward=self.cfg["maximize_reward"],
             log_prob_adj_reward=self.cfg["log_prob_adj_reward"],
         )
         expert_trainer.reward_func.load_state_dict(
             torch.load(self.model_file, map_location=self.policy.device
                        )["reward_func"])
-        if self.cfg["use_next_state_reward"]:
+        if self.cfg["reward_type"] == "next state":
             expert_trainer.state_reward_func.load_state_dict(
                 torch.load(self.model_file, map_location=self.policy.device
                            )["state_reward_func"])

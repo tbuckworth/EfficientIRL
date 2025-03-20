@@ -168,7 +168,7 @@ def main(algo="eirl",
     if epoch is not None:
         obj = {'model_state_dict': expert_trainer.policy.state_dict()}
         obj["reward_func"] = expert_trainer.reward_func.state_dict()
-        if use_next_state_reward:
+        if reward_type == "next state":
             obj["state_reward_func"] = expert_trainer.state_reward_func.state_dict()
         if log_prob_adj_reward:
             obj["lp_adj_reward"] = expert_trainer.lp_adj_reward.state_dict()
