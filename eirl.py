@@ -785,7 +785,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             rews = None
             if "rews" in batch.keys():
                 rews = util.safe_to_tensor(batch["rews"], device=self.policy.device)
-            one_hot_acts = None
+            one_hot_acts = acts
             if isinstance(self.action_space, gym.spaces.Discrete):
                 one_hot_acts = th.nn.functional.one_hot(acts, self.action_space.n).to(device=self.policy.device)
 
