@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import argparse
 import sys
 import subprocess
 import multiprocessing
@@ -32,23 +32,26 @@ def run_canon(_, model_files, tag):
            tag]
     subprocess.run(cmd)
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python multi_train.py <n>")
-        print("Example: python multi_train.py 5")
-        sys.exit(1)
-
-    n = int(sys.argv[1])  # Number of parallel processes
+def main(args):
+    # if len(sys.argv) < 2:
+    #     print("Usage: python multi_train.py <n>")
+    #     print("Example: python multi_train.py 5")
+    #     sys.exit(1)
+    #
+    # n = int(sys.argv[1])  # Number of parallel processes
 
     # tag = "hp0"
     # model_files = [x.tolist() for x in np.array_split(cartpole_dirs, n)]
-    args = [i for i in range(n)]
+    # sub_args = [(i) for i in range(args.n)]
     # Verify that the venv's python exists
 
-    with multiprocessing.Pool(processes=n) as pool:
+    with multiprocessing.Pool(processes=args.n) as pool:
         # Distribute the same venv_python path to each parallel worker
-        pool.starmap(run_script, args)
+        pool.map(run_script, range(args.n))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n', type=int, default=int(2), help='number to run')
+    args = parser.parse_args()
+    main(args)
