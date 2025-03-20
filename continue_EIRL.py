@@ -14,6 +14,7 @@ wandb = import_wandb()
 def main(model_dir, run_from, epochs, tags):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_file = get_latest_model(model_dir, run_from)
+    sup_model_file = get_latest_model(model_dir, "SUP")
     cfg = get_config(model_file)
     env_name = cfg["env_name"]
     n_envs = cfg["n_envs"]
@@ -44,7 +45,7 @@ def main(model_dir, run_from, epochs, tags):
     policy = get_policy_for(env.observation_space, env.action_space, net_arch)
     policy.to(device)
     policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
-    expert_trainer = load_expert_trainer(policy, cfg, model_file, default_rng, env, expert_transitions)
+    expert_trainer = load_expert_trainer(policy, cfg, sup_model_file, default_rng, env, expert_transitions)
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides, rew_const_adj)
 
