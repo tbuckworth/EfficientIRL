@@ -22,6 +22,10 @@ from stable_baselines3.common.vec_env import VecNormalize
 
 import eirl
 
+class DictToArgs:
+    def __init__(self, input_dict):
+        for key in input_dict.keys():
+            setattr(self, key, input_dict[key])
 
 def import_wandb():
     try:

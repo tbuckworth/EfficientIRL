@@ -4,14 +4,17 @@ import numpy as np
 import torch
 
 from ant_v1_learner_config import load_ppo_learner
+from callbacks import RewardLoggerCallback
 from eirl_tests import get_latest_model
 from helper_local import get_config, load_env, get_policy_for, load_expert_transitions, import_wandb, \
     load_expert_trainer
 from train_EIRL import evaluate, create_logdir, override_env_and_wrap_reward
 from imitation.util import logger as imit_logger
+
 wandb = import_wandb()
 
-def main(model_dir, run_from, epochs, tags):
+
+def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_file = get_latest_model(model_dir, run_from)
     sup_model_file = get_latest_model(model_dir, "SUP")
@@ -34,7 +37,7 @@ def main(model_dir, run_from, epochs, tags):
     cfg.update({
         "model_dir": model_dir,
         "run_from": run_from,
-        "epochs": epochs,
+        "learner_timesteps": learner_timesteps,
     })
     # net_arch = [32, 32]
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs,
@@ -55,20 +58,21 @@ def main(model_dir, run_from, epochs, tags):
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
     if run_from == "RL":
-        for i in range(epochs):
-            learner = load_ppo_learner(env_name, wenv, logdir, policy)
-            mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
-            learner.learn(total_timesteps=1000_000)
+        learner = load_ppo_learner(env_name, wenv, logdir, policy)
+        mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
+
+        learner.learn(total_timesteps=learner_timesteps, callback=RewardLoggerCallback())
+        torch.save({'model_state_dict': learner.policy.state_dict()},
+                   f'{logdir}/model_RL_{learner_timesteps}.pth')
     else:
         raise NotImplementedError
+
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     env.close()
     wandb.finish()
 
 
-
 if __name__ == "__main__":
     model_dir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
-    epochs = 10
     tags = ["Continue learning"]
-    main(model_dir, run_from="RL", epochs=epochs, tags=tags)
+    main(model_dir, run_from="RL", tags=tags)
