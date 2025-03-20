@@ -116,7 +116,10 @@ def select_next_hyperparameters(X, y, bounds, greater_is_better=True):
 
 def run_next_hyperparameters(hparams):
     from train_EIRL import trainEIRL
-    trainEIRL(**hparams)
+    import inspect
+    acceptable_params = inspect.signature(trainEIRL).parameters
+    filtered_params = {k:v for k,v in hparams.items() if k in acceptable_params}
+    trainEIRL(**filtered_params)
 
 
 def get_project(env_name, exp_name):
@@ -194,7 +197,7 @@ def search_eirl():
         n_expert_demos=60,
         extra_tags=["hp0"],
         early_learning=False,
-        env_name="seals/Hopper-v1",
+        env_name="seals:seals/Hopper-v1",
         overrides=None,
         expert_algo="sac",
         override_env_name=None,

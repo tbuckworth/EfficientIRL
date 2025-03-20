@@ -21,6 +21,7 @@ from typing import (
 
 import gymnasium as gym
 import numpy as np
+import torch
 import torch as th
 import torch.utils.data as th_data
 import tqdm
@@ -807,3 +808,35 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             # if there remains an incomplete batch
             batch_num += 1
             process_batch()
+
+
+def load_expert_trainer(policy, cfg, model_file, default_rng, env, expert_transitions):
+    expert_trainer = eirl.EIRL(
+        policy=policy,
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=expert_transitions,
+        rng=default_rng,
+        consistency_coef=cfg["consistency_coef"],
+        hard=cfg["hard"],
+        gamma=cfg["gamma"],
+        batch_size=cfg["batch_size"],
+        l2_weight=cfg["l2_weight"],
+        optimizer_cls=torch.optim.Adam,
+        optimizer_kwargs={"lr": cfg["lr"]},
+        reward_type=cfg["reward_type"],
+        maximize_reward=cfg["maximize_reward"],
+        log_prob_adj_reward=cfg["log_prob_adj_reward"],
+    )
+    expert_trainer.reward_func.load_state_dict(
+        torch.load(model_file, map_location=policy.device
+                   )["reward_func"])
+    if cfg["reward_type"] == "next state":
+        expert_trainer.state_reward_func.load_state_dict(
+            torch.load(model_file, map_location=policy.device
+                       )["state_reward_func"])
+    if cfg["log_prob_adj_reward"]:
+        expert_trainer.lp_adj_reward.load_state_dict(
+            torch.load(model_file, map_location=policy.device
+                       )["lp_adj_reward"])
+    return expert_trainer
