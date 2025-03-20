@@ -15,8 +15,6 @@ try:
 except ImportError:
     pass
 
-from helper_local import DictToArgs, add_training_args
-
 
 def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
                           opt_metric="summary.original_ep_return_mean",
