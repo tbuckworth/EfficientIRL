@@ -18,6 +18,8 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.vec_env import VecNormalize
+
 
 def import_wandb():
     try:
@@ -145,8 +147,8 @@ def get_config(logdir, pathname="config.npy"):
     return np.load(os.path.join(logdir, pathname), allow_pickle='TRUE').item()
 
 
-def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac"):
-    default_rng, env = load_env(env_name, n_envs, seed)
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac", norm_reward=False):
+    default_rng, env = load_env(env_name, n_envs, seed, norm_reward)
     expert = load_policy(
         f"{expert_algo}-huggingface",
         organization="HumanCompatibleAI",
@@ -170,7 +172,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
     return default_rng, env, expert_transitions, target_rewards
 
 
-def load_env(env_name, n_envs, seed, env_make_kwargs=None):
+def load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=False):
     default_rng = np.random.default_rng(seed)
     env = make_vec_env(
         f"{env_name}",
@@ -181,6 +183,8 @@ def load_env(env_name, n_envs, seed, env_make_kwargs=None):
         ],  # needed for computing rollouts later
         env_make_kwargs=env_make_kwargs
     )
+    if norm_reward:
+        env = VecNormalize(env, norm_obs=False, norm_reward=True)
     return default_rng, env
 
 

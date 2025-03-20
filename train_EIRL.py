@@ -108,7 +108,7 @@ def main(algo="eirl",
          expert_algo="sac",
          override_env_name=None,
          enforce_rew_val_consistency=True,
-         ):
+         norm_reward=True):
     net_arch = [256, 256, 256, 256]
 
     tags = [] + (extra_tags if extra_tags is not None else [])
@@ -117,7 +117,8 @@ def main(algo="eirl",
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
     default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
-                                                                                   n_expert_demos, seed, expert_algo)
+                                                                                   n_expert_demos, seed, expert_algo,
+                                                                                   norm_reward)
 
     policy = get_policy_for(env.observation_space, env.action_space, net_arch)
     if model_file is not None:
