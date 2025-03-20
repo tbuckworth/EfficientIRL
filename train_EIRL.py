@@ -109,7 +109,7 @@ def main(algo="eirl",
          override_env_name=None,
          enforce_rew_val_consistency=True,
          norm_reward=True):
-    net_arch = [256, 256, 256, 256]
+    net_arch = [32, 32]
 
     tags = [] + (extra_tags if extra_tags is not None else [])
     logdir = create_logdir(env_name, seed)
