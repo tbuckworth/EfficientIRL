@@ -10,14 +10,13 @@ from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.vec_env import VecVideoRecorder
 
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
-from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions
-from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
+from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, \
+    load_expert_trainer
+from train_EIRL import wrap_env_with_reward, create_logdir
 import gymnasium as gym
 wandb = import_wandb()
 
@@ -198,36 +197,9 @@ class TestHopperLearner(unittest.TestCase):
             self.cfg["seed"],
             self.cfg["expert_algo"],
         )
-        expert_trainer = eirl.EIRL(
-            policy=self.policy,
-            observation_space=env.observation_space,
-            action_space=env.action_space,
-            demonstrations=expert_transitions,
-            rng=default_rng,
-            consistency_coef=self.cfg["consistency_coef"],
-            hard=self.cfg["hard"],
-            gamma=self.cfg["gamma"],
-            batch_size=self.cfg["batch_size"],
-            l2_weight=self.cfg["l2_weight"],
-            optimizer_cls=torch.optim.Adam,
-            optimizer_kwargs={"lr": self.cfg["lr"]},
-            reward_type=self.cfg["reward_type"],
-            maximize_reward=self.cfg["maximize_reward"],
-            log_prob_adj_reward=self.cfg["log_prob_adj_reward"],
-        )
-        expert_trainer.reward_func.load_state_dict(
-            torch.load(self.model_file, map_location=self.policy.device
-                       )["reward_func"])
-        if self.cfg["reward_type"] == "next state":
-            expert_trainer.state_reward_func.load_state_dict(
-                torch.load(self.model_file, map_location=self.policy.device
-                           )["state_reward_func"])
-        if self.cfg["log_prob_adj_reward"]:
-            expert_trainer.lp_adj_reward.load_state_dict(
-                torch.load(self.model_file, map_location=self.policy.device
-                           )["lp_adj_reward"])
+        expert_trainer = load_expert_trainer(self.policy, self.cfg, self.model_file, default_rng, env,
+                                             expert_transitions)
         expert_trainer.train(n_epochs=5, progress_bar=False)
-
 
 
 if __name__ == '__main__':
