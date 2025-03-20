@@ -4,19 +4,21 @@ import unittest
 
 import numpy as np
 import torch
+from gymnasium.wrappers import RecordVideo
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.vec_env import VecVideoRecorder
 
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
 from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions
 from train_EIRL import WandbInfoLogger, wrap_env_with_reward, create_logdir
-
+import gymnasium as gym
 wandb = import_wandb()
 
 SEED = 42
@@ -107,11 +109,14 @@ def get_latest_model(folder, keyword):
 class TestHopperLearner(unittest.TestCase):
     def setUp(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logdir = "logs/train/seals:seals/MountainCar-v0/2025-03-19__07-57-24__seed_0"
+        # logdir = "logs/train/seals:seals/MountainCar-v0/2025-03-19__07-57-24__seed_0"
+        logdir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
         model_file = get_latest_model(logdir, "RL")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
+        n_envs = 1
+        record_video = True
         seed = cfg["seed"]
         net_arch = cfg["net_arch"]
         # net_arch = [32, 32]
@@ -124,6 +129,41 @@ class TestHopperLearner(unittest.TestCase):
         self.cfg = cfg
         self.model_file = model_file
         self.env = env
+        if record_video:
+            vid_env = gym.make(env_name, render_mode="rgb_array")
+            # Set up video recording parameters
+            video_folder = "./videos/"
+            video_length = 1000  # adjust to the desired length (in timesteps)
+            record_video_trigger = lambda x: x == 0  # records only the first episode; modify as needed
+
+            # Wrap your vectorized environment with VecVideoRecorder
+            self.vid_env = RecordVideo(
+                vid_env,
+                video_folder,
+                episode_trigger = lambda e: True,
+                video_length=video_length,
+                name_prefix="1.13"
+            )
+    def test_record_video(self):
+        obs, _ = self.vid_env.reset()
+        cum_reward = 0
+        for _ in range(1000):
+            # Sample a random action
+            with torch.no_grad():
+                action = self.policy._predict(torch.FloatTensor(obs).to(device=self.policy.device).unsqueeze(0))
+
+            # Step the environment
+            obs, reward, term, trunc, info = self.vid_env.step(action.squeeze().cpu().numpy())
+            cum_reward += reward
+            # Render the *first* (index 0) sub-environment
+            # This calls the 'render()' of the underlying gym environment
+
+            # Optionally reset if done
+            if term or trunc:
+                print(f"Total Reward: {cum_reward}")
+                self.vid_env.reset()
+                break
+        self.vid_env.close()
 
     def test_render(self):
         obs = self.env.reset()
