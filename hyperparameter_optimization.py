@@ -59,7 +59,7 @@ def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
     if len(df) == 0:
         return None, None
     # hp = [x for x in df.columns if re.search("config", x)]
-    # hp = [h for h in hp if h not in ["config.wandb_tags"]]
+    # hp = [h for h in hp if h not in ["config.extra_tags"]]
     # hp = [h for h in hp if len(df[h].unique()) > 1]
 
     hp = [f"config.{h}" for h in hparams if f"config.{h}" in df.columns]
@@ -133,10 +133,10 @@ def optimize_hyperparams(bounds,
                          greater_is_better=True,
                          abs=False,
                          ):
-    strings = {k: v for k, v in fixed.items() if isinstance(v, list) and k != "wandb_tags"}
+    strings = {k: v for k, v in fixed.items() if isinstance(v, list) and k != "extra_tags"}
     string_select = {k: v[np.random.choice(len(v))] for k, v in strings.items()}
     if "env_name" in string_select.keys():
-        project = get_project(string_select["env_name"], fixed["exp_name"])
+        project = "EfficientIRL"
     try:
         X, y = get_wandb_performance(bounds.keys(), project, id_tag, opt_metric)
         if abs:
@@ -167,14 +167,14 @@ def init_wandb(cfg, prefix="symbolic_graph"):
     name = np.random.randint(1e5)
     wandb_login()
     wb_resume = "allow"  # if args.model_file is None else "must"
-    project = get_project(cfg["env_name"], cfg["exp_name"])
+    project = "EfficientIRL"
     wandb.init(project=project, config=cfg, sync_tensorboard=True,
-               tags=cfg["wandb_tags"], resume=wb_resume, name=f"{prefix}-{name}")
+               tags=cfg["extra_tags"], resume=wb_resume, name=f"{prefix}-{name}")
 
 
 def run_forever(bounds, fixed, run_func, opt_metric, abs=False):
-    project = get_project(fixed["env_name"], fixed["exp_name"])
-    id_tag = fixed["wandb_tags"][0]
+    project = "EfficientIRL"
+    id_tag = fixed["extra_tags"][0]
     fixed["original_start"] = time.asctime()
     while True:
         optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs)
