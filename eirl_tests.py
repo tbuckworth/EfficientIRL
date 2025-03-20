@@ -119,7 +119,9 @@ class TestHopperLearner(unittest.TestCase):
         record_video = True
         seed = cfg["seed"]
         net_arch = cfg["net_arch"]
-        # net_arch = [32, 32]
+
+
+
         default_rng, env = load_env(env_name, n_envs, seed, {"render_mode":"human"})
         policy = get_policy_for(env.observation_space, env.action_space, net_arch)
         policy.to(device)

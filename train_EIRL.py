@@ -224,11 +224,11 @@ env_names = [
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [100]:
-            for maximize_reward in [False, True]:
-                for hard in [False, True]:
-                    for enforce_rew_val_consistency in [False, True]:
-                        for seed in [0, 100, 123, 412]:
-                            for reward_type in ["state-action", "next state", "state"]:
+            for maximize_reward in [False]:#, True]:
+                for hard in [False]:#, True]:
+                    for enforce_rew_val_consistency in [False]:#, True]:
+                        for seed in [100, 0, 123, 412]:
+                            for reward_type in ["next state"]:#, "state-action", "next state", "state"]:
                                 main(algo, seed,
                                      n_epochs=n_epochs,
                                      reward_type=reward_type,
