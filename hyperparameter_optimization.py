@@ -182,29 +182,19 @@ def run_forever(bounds, fixed, run_func, opt_metric, abs=False):
         optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs)
 
 
-def ppo():
+def search_eirl():
     fixed = dict(
         algo="eirl",
         seed=[0, 42, 100, 532, 3432],
         hard=False,
-        consistency_coef=100.,
-        n_epochs=20,
-        model_file=None,
         reward_type="next state",
         log_prob_adj_reward=False,
         neg_reward=False,
         maximize_reward=False,
         rew_const_adj=0,
-        learner_timesteps=1000_000,
-        gamma=0.995,
         training_increments=5,
-        lr=0.0007172435323620212,
-        l2_weight=0,  # 1.3610189916104634e-6,
-        batch_size=64,
-        n_eval_episodes=50,
-        n_envs=16,
         n_expert_demos=60,
-        extra_tags=None,
+        extra_tags=["hp0"],
         early_learning=False,
         env_name="seals/Hopper-v1",
         overrides=None,
@@ -216,9 +206,9 @@ def ppo():
     bounds = dict(
         consistency_coef=[10., 1000.],
         n_epochs=[50, 250],
-        log_prob_adj_reward=False,
-        neg_reward=False,
-        maximize_reward=False,
+        # log_prob_adj_reward=False,
+        # neg_reward=False,
+        # maximize_reward=False,
         learner_timesteps=[1000_000, 5000_000],
         gamma=[0.8, 0.999],
         training_increments=[5, 10],
@@ -226,10 +216,10 @@ def ppo():
         l2_weight=[0, 0.01],
         batch_size=[32, 128],
         n_envs=[8, 64],
-        enforce_rew_val_consistency=False,
+        # enforce_rew_val_consistency=False,
     )
     run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean")
 
 
 if __name__ == "__main__":
-    ppo()
+    search_eirl()
