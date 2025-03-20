@@ -87,7 +87,7 @@ def main(algo="eirl",
          consistency_coef=100.,
          n_epochs=20,
          model_file=None,
-         use_next_state_reward=True,
+         reward_type="next state",
          log_prob_adj_reward=False,
          neg_reward=False,
          maximize_reward=False,
@@ -138,7 +138,7 @@ def main(algo="eirl",
             l2_weight=l2_weight,
             optimizer_cls=torch.optim.Adam,
             optimizer_kwargs={"lr": lr},
-            use_next_state_reward=use_next_state_reward,
+            reward_type=reward_type,
             maximize_reward=maximize_reward,
             log_prob_adj_reward=log_prob_adj_reward,
             enforce_rew_val_consistency=enforce_rew_val_consistency,
@@ -223,22 +223,22 @@ env_names = [
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [50]:
-            for seed in [0, 100, 123, 412]:  # , 352, 342, 3232, 23243, 233343]:
-                for use_next_state_reward in [False, True]:
-                    for maximize_reward in [False, True]:
-                        for hard in [False, True]:
-                            for enforce_rew_val_consistency in [False, True]:
+            for maximize_reward in [False, True]:
+                for hard in [False, True]:
+                    for enforce_rew_val_consistency in [False, True]:
+                        for seed in [0, 100, 123, 412]:
+                            for reward_type in ["state-action", "next state", "state"]:
                                 main(algo, seed,
                                      n_epochs=n_epochs,
-                                     use_next_state_reward=use_next_state_reward,
+                                     reward_type=reward_type,
                                      maximize_reward=maximize_reward,
-                                     extra_tags=["MountainCar"],
+                                     extra_tags=["state-action reward test"],
                                      early_learning=False,
                                      learner_timesteps=1000_000,
-                                     env_name="seals:seals/MountainCar-v0",
+                                     env_name="seals:seals/Hopper-v1",
                                      override_env_name=None,#"MountainCar-v0",
                                      overrides=None,#{"gravity": 15.0},
-                                     expert_algo="ppo",
+                                     expert_algo="sac",
                                      hard=hard,
                                      enforce_rew_val_consistency=enforce_rew_val_consistency,
                                      )

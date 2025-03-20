@@ -159,7 +159,7 @@ class EfficientIRLLossCalculator:
     l2_weight: float
     consistency_coef: float
     hard: bool
-    use_next_state_reward: bool
+    reward_type: bool
     maximize_reward: bool
     log_prob_adj_reward: bool
     enforce_rew_val_consistency: bool
@@ -217,18 +217,22 @@ class EfficientIRLLossCalculator:
         if self.hard:
             actor_advantage = log_prob + entropy
 
-        if self.use_next_state_reward:
-            # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in the case of no existing next state.
+        if self.reward_type == "next state":
+            # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in
+            # the case of no existing next state.
             sa_rew_hat = reward_func(obs, one_hot_acts, None, None)
-            # This only uses next states:
+            # This only uses next states (obs is necessary for some shape calc):
             ns_rew_hat = state_reward_func(obs, None, nobs, None)
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
+            # This loss just makes sa_rew imitate ns_rew, because we ultimately want to export sa_rew
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
 
             loss3 = rew_cons_loss
         else:
-            reward_hat = reward_func(obs, None, None, None)
+            # This could be a state reward function or a state action reward function:
+            reward_hat = reward_func(obs, one_hot_acts, None, None)
             loss3 = 0
+
 
         if self.log_prob_adj_reward:
             lp_rew = lp_adj_reward(obs, one_hot_acts, None, None)
@@ -504,7 +508,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             state_reward_func: Optional[Callable] = None,
             hard=True,
             gamma=0.99,
-            use_next_state_reward=True,
+            reward_type="next state",
             maximize_reward=False,
             log_prob_adj_reward=False,
             enforce_rew_val_consistency=False,
@@ -579,7 +583,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 reward_constructor = CnnRewardNet
             else:
                 reward_constructor = BasicRewardNet
-            if use_next_state_reward:
+            if reward_type == "next state":
                 state_reward_func = reward_constructor(observation_space=observation_space,
                                                        action_space=action_space,
                                                        use_state=False,
@@ -595,20 +599,31 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                                                  use_done=False,
                                                  )
                 self.state_reward_func = state_reward_func.to(utils.get_device(device))
-            else:
+            elif reward_type == "state":
                 reward_func = reward_constructor(observation_space=observation_space,
                                                  action_space=action_space,
                                                  use_state=True,
                                                  use_action=False,
                                                  use_next_state=False,
                                                  use_done=False, )
+            elif reward_type == "state-action":
+                reward_func = reward_constructor(observation_space=observation_space,
+                                                 action_space=action_space,
+                                                 use_state=True,
+                                                 use_action=True,
+                                                 use_next_state=False,
+                                                 use_done=False,
+                                                 )
+            else:
+                raise NotImplementedError(f"reward_type {reward_type} not implemented")
             if log_prob_adj_reward:
                 lp_adj_reward = reward_constructor(observation_space=observation_space,
                                                    action_space=action_space,
                                                    use_state=True,
                                                    use_action=True,
                                                    use_next_state=False,
-                                                   use_done=False, )
+                                                   use_done=False,
+                                                   )
                 self.lp_adj_reward = lp_adj_reward.to(utils.get_device(device))
         self.reward_func = reward_func.to(utils.get_device(device))
         self._policy = policy.to(utils.get_device(device))
@@ -625,7 +640,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             **optimizer_kwargs,
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
-                                                          use_next_state_reward, maximize_reward, log_prob_adj_reward,
+                                                          reward_type, maximize_reward, log_prob_adj_reward,
                                                           enforce_rew_val_consistency)
 
     @property
