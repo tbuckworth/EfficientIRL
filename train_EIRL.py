@@ -232,19 +232,19 @@ env_names = [
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [100]:
+        for n_epochs in [100, 150, 300]:
             for maximize_reward in [False]:#, True]:
                 for hard in [False]:#, True]:
-                    for enforce_rew_val_consistency in [False]:#, True]:
-                        for seed in [100, 0, 123, 412]:
+                    for enforce_rew_val_consistency in [False, True]:
+                        for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
                             for reward_type in ["next state"]:#, "state-action", "next state", "state"]:
                                 trainEIRL(algo, seed,
                                           n_epochs=n_epochs,
                                           reward_type=reward_type,
                                           maximize_reward=maximize_reward,
-                                          extra_tags=["state-action reward test"],
+                                          extra_tags=["state-action reward test", "Working test"],
                                           early_learning=False,
-                                          learner_timesteps=1000_000,
+                                          learner_timesteps=3000_000,
                                           env_name="seals:seals/Hopper-v1",
                                           override_env_name=None,  #"MountainCar-v0",
                                           overrides=None,  #{"gravity": 15.0},
