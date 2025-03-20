@@ -148,7 +148,7 @@ def get_config(logdir, pathname="config.npy"):
 
 
 def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac", norm_reward=False):
-    default_rng, env = load_env(env_name, n_envs, seed, norm_reward)
+    default_rng, env = load_env(env_name, n_envs, seed, norm_reward=norm_reward)
     expert = load_policy(
         f"{expert_algo}-huggingface",
         organization="HumanCompatibleAI",
