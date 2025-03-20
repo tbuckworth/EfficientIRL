@@ -222,7 +222,7 @@ env_names = [
 
 if __name__ == "__main__":
     for algo in ["eirl"]:
-        for n_epochs in [50]:
+        for n_epochs in [100]:
             for maximize_reward in [False, True]:
                 for hard in [False, True]:
                     for enforce_rew_val_consistency in [False, True]:
