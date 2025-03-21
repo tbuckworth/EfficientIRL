@@ -110,18 +110,16 @@ class TestHopperLearner(unittest.TestCase):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # logdir = "logs/train/seals:seals/MountainCar-v0/2025-03-19__07-57-24__seed_0"
         logdir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
+        logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__05-14-17__seed_100"
         model_file = get_latest_model(logdir, "RL")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
-        n_envs = 1
         record_video = True
         seed = cfg["seed"]
         net_arch = cfg["net_arch"]
 
-
-
-        default_rng, env = load_env(env_name, n_envs, seed, {"render_mode":"human"})
+        default_rng, env = load_env(env_name, n_envs, seed, )#{"render_mode":"human"})
         policy = get_policy_for(env.observation_space, env.action_space, net_arch)
         policy.to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
@@ -143,7 +141,7 @@ class TestHopperLearner(unittest.TestCase):
                 video_folder,
                 episode_trigger = lambda e: True,
                 video_length=video_length,
-                name_prefix="1.13"
+                name_prefix="1.21"
             )
     def test_record_video(self):
         obs, _ = self.vid_env.reset()
