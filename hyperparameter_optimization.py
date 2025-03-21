@@ -199,7 +199,7 @@ def search_eirl():
         early_learning=False,
         env_name="seals:seals/Ant-v1",
         overrides=None,
-        expert_algo="sac",
+        expert_algo="ppo",
         override_env_name=None,
         enforce_rew_val_consistency=False,
         norm_reward=[False, True]
