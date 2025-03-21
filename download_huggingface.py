@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from imitation.data import rollout
 from stable_baselines3 import TD3
@@ -22,7 +24,7 @@ def main():
 
     # Wrap or adapt 'model' as needed for your imitation training routines.
     expert = model.policy
-    env_name = "seals/Hopper-v1"
+    env_name = "Hopper-v3"
     n_envs = 2
     seed = 0
     n_eval_episodes = 10
@@ -45,4 +47,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print(os.environ.get("LD_LIBRARY_PATH"))
     main()
