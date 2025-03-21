@@ -1,6 +1,4 @@
 import os
-import re
-import time
 
 import gymnasium as gym
 import numpy as np
@@ -14,7 +12,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, load_expert_transitions, get_policy_for
+from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -70,15 +68,6 @@ class WandbInfoLogger(BaseCallback):
             if ep_orig_rew != []:
                 wandb.log({"rollout/ep_orig_rew_mean": np.mean(ep_orig_rew)}, step=self.num_timesteps)
         return True  # Continue training
-
-
-def create_logdir(env_name, seed):
-    logdir = os.path.join('logs', 'train', env_name)
-    run_name = time.strftime("%Y-%m-%d__%H-%M-%S") + f'__seed_{seed}'
-    logdir = os.path.join(logdir, run_name)
-    if not os.path.exists(logdir):
-        os.makedirs(logdir)
-    return logdir
 
 
 def trainEIRL(algo="eirl",

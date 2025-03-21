@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 
 import gymnasium as gym
 from imitation.data import types, rollout
@@ -246,3 +247,12 @@ class ObsCutWrapper(gym.Wrapper):
     def step(self, action):
         obs, rew, terminated, truncated, info = self.env.step(action)
         return obs[..., :-1], rew, terminated, truncated, info
+
+
+def create_logdir(env_name, seed):
+    logdir = os.path.join('logs', 'train', env_name)
+    run_name = time.strftime("%Y-%m-%d__%H-%M-%S") + f'__seed_{seed}'
+    logdir = os.path.join(logdir, run_name)
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+    return logdir

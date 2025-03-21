@@ -14,9 +14,9 @@ from stable_baselines3.common.evaluation import evaluate_policy
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
-from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions
+from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir
 from eirl import load_expert_trainer
-from train_EIRL import wrap_env_with_reward, create_logdir
+from train_EIRL import wrap_env_with_reward
 import gymnasium as gym
 wandb = import_wandb()
 
