@@ -9,7 +9,7 @@ wandb = import_wandb()
 
 def trainRL(
             seed=42,
-            learner_timesteps=5000_000,
+            learner_timesteps=8000_000,
             n_envs=16,
             extra_tags=None,
             env_name="seals:seals/Hopper-v1",
