@@ -30,6 +30,7 @@ def trainRL(
                   gradient_steps=1,
                   learning_starts=10000,
                   train_freq=1,
+                  tensorboard_log=logdir,
                   )
 
     learner.learn(learner_timesteps)
