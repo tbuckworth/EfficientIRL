@@ -7,8 +7,7 @@ from stable_baselines3 import TD3
 from huggingface_sb3 import load_from_hub
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from helper_local import load_env
-
+from helper_local import load_env, ObsCutWrapper
 
 
 def main():
@@ -24,11 +23,11 @@ def main():
 
     # Wrap or adapt 'model' as needed for your imitation training routines.
     expert = model.policy
-    env_name = "Hopper-v3"
+    env_name = "seals:seals/Hopper-v1"
     n_envs = 2
     seed = 0
     n_eval_episodes = 10
-    default_rng, env = load_env(env_name, n_envs, seed)
+    default_rng, env = load_env(env_name, n_envs, seed, pre_wrappers=[ObsCutWrapper])
 
     expert_rewards, _ = evaluate_policy(
         expert, env, n_eval_episodes, return_episode_rewards=True

@@ -25,6 +25,7 @@ class DictToArgs:
         for key in input_dict.keys():
             setattr(self, key, input_dict[key])
 
+
 def import_wandb():
     try:
         import wandb
@@ -35,9 +36,8 @@ def import_wandb():
         return None
 
 
-
 def flatten_trajectories(
-    trajectories: Iterable[types.Trajectory],
+        trajectories: Iterable[types.Trajectory],
 ) -> types.Transitions:
     """Flatten a series of trajectory dictionaries into arrays.
 
@@ -84,8 +84,9 @@ def flatten_trajectories(
     assert len(lengths) == 1, f"expected one length, got {lengths}"
     return types.TransitionsWithRew(**cat_parts)
 
+
 def transitions_with_rew_collate_fn(
-    batch: Sequence[Mapping[str, np.ndarray]],
+        batch: Sequence[Mapping[str, np.ndarray]],
 ) -> Mapping[str, AnyTensor]:
     """Custom `torch.utils.data.DataLoader` collate_fn for `TransitionsMinimal`.
 
@@ -121,9 +122,6 @@ def load_json(file_json="your_file.json"):
     return data
 
 
-
-
-
 class StateDependentStdPolicy(ActorCriticPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -146,12 +144,14 @@ class StateDependentStdPolicy(ActorCriticPolicy):
         # std = torch.exp(log_std)  # Convert to standard deviation
         return self.action_dist.proba_distribution(mean_actions, log_std)
 
+
 def get_config(logdir, pathname="config.npy"):
-    logdir = re.sub(r"model.*\.pth","", logdir)
+    logdir = re.sub(r"model.*\.pth", "", logdir)
     return np.load(os.path.join(logdir, pathname), allow_pickle='TRUE').item()
 
 
-def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac", norm_reward=False):
+def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac",
+                            norm_reward=False):
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=norm_reward)
     expert = load_policy(
         f"{expert_algo}-huggingface",
@@ -176,13 +176,19 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
     return default_rng, env, expert_transitions, target_rewards
 
 
-def load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=False):
+def load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=False, pre_wrappers=None):
+    if pre_wrappers is None:
+        pre_wrappers = []
+    elif not isinstance(pre_wrappers, list):
+        pre_wrappers = [lambda env, _: pre_wrappers(env)]
+    else:
+        pre_wrappers = [lambda env, _: wrapper(env) for wrapper in pre_wrappers]
     default_rng = np.random.default_rng(seed)
     env = make_vec_env(
         f"{env_name}",
         rng=default_rng,
         n_envs=n_envs,
-        post_wrappers=[
+        post_wrappers=pre_wrappers + [
             lambda env, _: RolloutInfoWrapper(env)
         ],  # needed for computing rollouts later
         env_make_kwargs=env_make_kwargs
@@ -219,3 +225,24 @@ def get_policy_for(observation_space, action_space, net_arch):
     )
 
 
+class ObsCutWrapper(gym.Wrapper):
+    """Cut the final observation - for hopper v3 vs v1 compatibility
+    """
+
+    def __init__(self, env: gym.Env):
+        super().__init__(env)
+        sp = env.observation_space
+        self.observation_space = gym.spaces.Box(
+            low=sp.low[:-1],
+            high=sp.high[:-1],
+            shape=(sp.shape[0] - 1,),
+            dtype=sp.dtype,
+        )
+
+    def reset(self, **kwargs):
+        new_obs, info = super().reset(**kwargs)
+        return new_obs[..., :-1], info
+
+    def step(self, action):
+        obs, rew, terminated, truncated, info = self.env.step(action)
+        return obs[..., :-1], rew, terminated, truncated, info
