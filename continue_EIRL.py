@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 
-from ant_v1_learner_config import load_ppo_learner
+from ant_v1_learner_config import load_learner
 from callbacks import RewardLoggerCallback
 from helper_local import get_config, load_env, get_policy_for, load_expert_transitions, import_wandb, create_logdir, \
     get_latest_model
@@ -58,7 +58,7 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
     if run_from == "RL":
-        learner = load_ppo_learner(env_name, wenv, logdir, policy)
+        learner = load_learner(env_name, wenv, logdir, policy)
         mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
 
         learner.learn(total_timesteps=learner_timesteps, callback=RewardLoggerCallback())

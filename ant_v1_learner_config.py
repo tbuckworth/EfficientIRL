@@ -104,7 +104,7 @@ def load_ant_sac_learner(env, logdir, policy):
         stats_window_size=100,
         tensorboard_log=logdir,
         policy_kwargs={'log_std_init': -2.2692589009754176,
-                       'net_arch': [32, 32],
+                       'net_arch': policy.net_arch,
                        'use_sde': False},
         verbose=0,
         seed=None,
@@ -117,6 +117,7 @@ def load_ant_sac_learner(env, logdir, policy):
     learner.policy.actor.features_extractor.load_state_dict(policy.pi_features_extractor.state_dict())
     learner.policy.actor.latent_pi.load_state_dict(policy.mlp_extractor.policy_net.state_dict())
     learner.policy.actor.mu.load_state_dict(policy.action_net.state_dict())
+    learner.policy.actor.log_std.load_state_dict(policy.log_std_net.state_dict())
 
     return learner
 
@@ -248,11 +249,11 @@ def load_pendulum_ppo_learner(wenv, logdir, policy):
         gae_lambda=0.95,
         clip_range=0.2,
         clip_range_vf=None,
-        normalize_advantage=False,#TODO:?
+        normalize_advantage=False,  # TODO:?
         ent_coef=0,
         # vf_coef=0.20315938606555833,
         max_grad_norm=0.9,
-        use_sde=False,# not sure if best
+        use_sde=False,  # not sure if best
         sde_sample_freq=4,
         rollout_buffer_class=None,
         rollout_buffer_kwargs=None,
@@ -308,15 +309,29 @@ def load_mountaincar_ppo_learner(wenv, logdir, policy):
     return learner
 
 
-def load_ppo_learner(env_name, wenv, logdir, policy):
-    if env_name == "seals:seals/Hopper-v1":
-        return load_hopper_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals:seals/Ant-v1":
-        return load_ant_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals:seals/CartPole-v0":
-        return load_cartpole_ppo_learner(wenv, logdir, policy)
-    if env_name == "Pendulum-v1":
-        return load_pendulum_ppo_learner(wenv, logdir, policy)
-    if env_name == "seals:seals/MountainCar-v0":
-        return load_mountaincar_ppo_learner(wenv, logdir, policy)
+# def load_ant_sac_learner(wenv, logdir, policy):
+#     learner = SAC(
+#         'MlpPolicy',
+#         wenv,
+#         tensorboard_log=logdir,
+#     )
+#     learner.policy
+#     return learner
+
+
+def load_learner(env_name, wenv, logdir, policy, rl_algo="ppo"):
+    if rl_algo == "ppo":
+        if env_name == "seals:seals/Hopper-v1":
+            return load_hopper_ppo_learner(wenv, logdir, policy)
+        if env_name == "seals:seals/Ant-v1":
+            return load_ant_ppo_learner(wenv, logdir, policy)
+        if env_name == "seals:seals/CartPole-v0":
+            return load_cartpole_ppo_learner(wenv, logdir, policy)
+        if env_name == "Pendulum-v1":
+            return load_pendulum_ppo_learner(wenv, logdir, policy)
+        if env_name == "seals:seals/MountainCar-v0":
+            return load_mountaincar_ppo_learner(wenv, logdir, policy)
+    elif rl_algo == "sac":
+        if env_name == "seals:seals/Ant-v1":
+            return load_ant_sac_learner(wenv, logdir, policy)
     raise NotImplementedError

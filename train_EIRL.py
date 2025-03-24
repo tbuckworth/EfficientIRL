@@ -19,7 +19,7 @@ from modified_cartpole import overridden_vec_env
 wandb = import_wandb()
 
 import eirl
-from ant_v1_learner_config import load_ppo_learner
+from ant_v1_learner_config import load_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
@@ -98,7 +98,9 @@ def trainEIRL(algo="eirl",
               override_env_name=None,
               enforce_rew_val_consistency=True,
               norm_reward=True,
-              net_arch=None):
+              net_arch=None,
+              rl_algo="ppo",
+              ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
 
@@ -171,9 +173,7 @@ def trainEIRL(algo="eirl",
         return
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides, rew_const_adj)
-    learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
-    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="supervised", log=True)
-    # for i in range(20):
+    learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
@@ -198,9 +198,9 @@ def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_rew
     return env, wenv
 
 
-def evaluate(env, expert_trainer, target_rewards, phase, log=False):
+def evaluate(env, expert_trainer, target_rewards, phase, log=False, callback=None):
     rewards, _ = evaluate_policy(
-        expert_trainer.policy, env, 10, return_episode_rewards=True
+        expert_trainer.policy, env, 10, return_episode_rewards=True, callback=callback
     )
     mean_rew = np.mean(rewards)
     std_err = np.std(rewards) / np.sqrt(len(rewards))
@@ -230,21 +230,23 @@ if __name__ == "__main__":
                     for enforce_rew_val_consistency in [False]:
                         for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
                             for reward_type in ["next state"]:  # , "state-action", "next state", "state"]:
-                                trainEIRL(algo, seed,
-                                          n_expert_demos=1,
-                                          model_file=model_file,
-                                          n_epochs=n_epochs,
-                                          reward_type=reward_type,
-                                          maximize_reward=maximize_reward,
-                                          extra_tags=["ant"],
-                                          early_learning=False,
-                                          learner_timesteps=3000_000,
-                                          env_name="seals:seals/Ant-v1",
-                                          override_env_name=None,  # "MountainCar-v0",
-                                          overrides=None,  # {"gravity": 15.0},
-                                          expert_algo="ppo",
-                                          hard=hard,
-                                          enforce_rew_val_consistency=enforce_rew_val_consistency,
-                                          norm_reward=False,
-                                          # n_expert_demos=1,
-                                          )
+                                trainEIRL(
+                                    algo, seed,
+                                    n_expert_demos=1,
+                                    rl_algo="sac",
+                                    model_file=model_file,
+                                    n_epochs=n_epochs,
+                                    reward_type=reward_type,
+                                    maximize_reward=maximize_reward,
+                                    extra_tags=["ant"],
+                                    early_learning=False,
+                                    learner_timesteps=3000_000,
+                                    env_name="seals:seals/Ant-v1",
+                                    override_env_name=None,  # "MountainCar-v0",
+                                    overrides=None,  # {"gravity": 15.0},
+                                    expert_algo="ppo",
+                                    hard=hard,
+                                    enforce_rew_val_consistency=enforce_rew_val_consistency,
+                                    norm_reward=False,
+                                    # n_expert_demos=1,
+                                )

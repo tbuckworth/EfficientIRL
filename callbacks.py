@@ -81,6 +81,12 @@ class RewardLoggerCallback(BaseCallback):
         infos = self.locals.get("infos")
         rewards = self.locals.get("rewards")
         dones = self.locals.get("dones")
+        if False:
+            import re
+            rew_names = [k for k, v in infos[0].items() if re.search("rew",k)]
+            all_rew = np.array([[v for k,v in info.items() if re.search("rew",k)] for info in infos]).T
+            rew_names
+            np.corrcoef(all_rew, rewards)[:-1, -1]
         # Update reward sums for each env
         for i, info in enumerate(infos):
             # Add current step rewards to accumulators
@@ -99,6 +105,7 @@ class RewardLoggerCallback(BaseCallback):
                 if self.verbose:
                     print(f"[Episode End] Env {i}: Original Return={ep_orig_return:.2f}, Learned Return={ep_learned_return:.2f}")
                 # Reset for next episode
+                # info["episode"]["r"]
                 self._orig_sum[i] = 0.0
                 self._learned_sum[i] = 0.0
         # If any episodes finished, log the average returns over recent episodes

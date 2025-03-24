@@ -10,7 +10,7 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 
 import eirl
-from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
+from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_learner
 from callbacks import RewardLoggerCallback
 from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir, \
     get_latest_model
@@ -114,7 +114,7 @@ class TestHopperLearner(unittest.TestCase):
         policy = get_policy_for(env.observation_space, env.action_space, net_arch)
         policy.to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
-        self.learner = load_ppo_learner(env_name, env, None, policy)
+        self.learner = load_learner(env_name, env, None, policy)
         self.policy = policy
         self.cfg = cfg
         self.model_file = model_file
