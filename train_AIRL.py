@@ -7,6 +7,7 @@ from imitation.rewards.reward_nets import BasicShapedRewardNet
 from imitation.util.networks import RunningNorm
 from imitation.util import logger as imit_logger
 from stable_baselines3 import PPO
+from stable_baselines3.common.utils import get_schedule_fn
 
 from helper_local import load_expert_transitions, load_expert_rollouts, create_logdir, import_wandb
 import json
@@ -27,7 +28,11 @@ def train_AIRL(
 ):
     if tags is None:
         tags = []
-    with open('hp_tune/airl_seals_ant_best_hp_eval.json', 'r') as f:
+    hparams = 'hp_tune/airl_seals_ant_best_hp_eval.json'
+
+    wandb_config = locals()
+
+    with open(hparams, 'r') as f:
         cfg = json.load(f)
 
     n_eval_episodes = cfg['policy_evaluation']['n_episodes_eval']
@@ -38,14 +43,18 @@ def train_AIRL(
     total_timesteps = cfg['total_timesteps']
 
     logdir = create_logdir(env_name, seed)
-    np.save(os.path.join(logdir, "config.npy"), locals())
-    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
+    np.save(os.path.join(logdir, "config.npy"), wandb_config)
+    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=wandb_config, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
     default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
-    policy = FeedForward32Policy()
+    policy = FeedForward32Policy(
+        observation_space = env.observation_space,
+        action_space = env.action_space,
+        lr_schedule = get_schedule_fn(rl_kwargs["learning_rate"]),
+    )
     learner = PPO(
         env=env,
         policy=policy,
@@ -66,6 +75,7 @@ def train_AIRL(
         gen_algo=learner,
         reward_net=reward_net,
         custom_logger=custom_logger,
+        init_tensorboard=True,
         allow_variable_horizon=False,  # TODO - what do we really want here?
     )
     expert_trainer.train(total_timesteps=total_timesteps)
@@ -74,4 +84,5 @@ def train_AIRL(
 
 
 if __name__ == '__main__':
-    train_AIRL(env_name="seals:seals/Ant-v1")
+    for seed in [0, 42, 100, 50, 35]:
+        train_AIRL(env_name="seals:seals/Ant-v1")
