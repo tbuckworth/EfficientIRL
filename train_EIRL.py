@@ -12,7 +12,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir
+from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -172,6 +172,7 @@ def trainEIRL(algo="eirl",
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides, rew_const_adj)
     learner = load_ppo_learner(env_name, wenv, logdir, expert_trainer.policy)
+    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="supervised", log=True)
     # for i in range(20):
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
@@ -221,14 +222,17 @@ env_names = [
 ]
 
 if __name__ == "__main__":
+    model_file = get_latest_model("logs/train/seals:seals/Ant-v1/2025-03-22__05-15-35__seed_0", "SUP")
     for algo in ["eirl"]:
-        for n_epochs in [150]:
+        for n_epochs in [0]:
             for maximize_reward in [False]:  # , True]:
                 for hard in [False]:  # , True]:
                     for enforce_rew_val_consistency in [False]:
                         for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
                             for reward_type in ["next state"]:  # , "state-action", "next state", "state"]:
                                 trainEIRL(algo, seed,
+                                          n_expert_demos=1,
+                                          model_file=model_file,
                                           n_epochs=n_epochs,
                                           reward_type=reward_type,
                                           maximize_reward=maximize_reward,

@@ -1,5 +1,3 @@
-import os
-import re
 import unittest
 
 import numpy as np
@@ -14,7 +12,8 @@ from stable_baselines3.common.evaluation import evaluate_policy
 import eirl
 from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_ppo_learner
 from callbacks import RewardLoggerCallback
-from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir
+from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir, \
+    get_latest_model
 from eirl import load_expert_trainer
 from train_EIRL import wrap_env_with_reward
 import gymnasium as gym
@@ -94,15 +93,6 @@ class MyTestCase(unittest.TestCase):
         learner = load_ant_sac_learner(wenv, logdir, expert_trainer.policy)
         # for i in range(20):
         learner.learn(10_000, callback=RewardLoggerCallback())
-
-
-def get_latest_model(folder, keyword):
-    search = lambda x: re.search(rf"model_{keyword}_(\d*).pth", x)
-    if search(folder):
-        return folder
-    files = [os.path.join(folder, x) for x in os.listdir(folder)]
-    last_checkpoint = max([int(search(x).group(1)) for x in files if search(x)])
-    return [x for x in files if re.search(f"model_{keyword}_{last_checkpoint}.pth", x)][0]
 
 
 class TestHopperLearner(unittest.TestCase):

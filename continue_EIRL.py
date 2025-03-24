@@ -5,8 +5,8 @@ import torch
 
 from ant_v1_learner_config import load_ppo_learner
 from callbacks import RewardLoggerCallback
-from eirl_tests import get_latest_model
-from helper_local import get_config, load_env, get_policy_for, load_expert_transitions, import_wandb, create_logdir
+from helper_local import get_config, load_env, get_policy_for, load_expert_transitions, import_wandb, create_logdir, \
+    get_latest_model
 from eirl import load_expert_trainer
 from train_EIRL import evaluate, override_env_and_wrap_reward
 from imitation.util import logger as imit_logger

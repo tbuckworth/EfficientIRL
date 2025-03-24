@@ -262,3 +262,12 @@ def create_logdir(env_name, seed):
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     return logdir
+
+
+def get_latest_model(folder, keyword):
+    search = lambda x: re.search(rf"model_{keyword}_(\d*).pth", x)
+    if search(folder):
+        return folder
+    files = [os.path.join(folder, x) for x in os.listdir(folder)]
+    last_checkpoint = max([int(search(x).group(1)) for x in files if search(x)])
+    return [x for x in files if re.search(f"model_{keyword}_{last_checkpoint}.pth", x)][0]
