@@ -153,6 +153,14 @@ def get_config(logdir, pathname="config.npy"):
 
 def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac",
                             norm_reward=False):
+    default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
+                                                                             n_eval_episodes, n_expert_demos,
+                                                                             norm_reward, seed)
+    expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
+    return default_rng, env, expert_transitions, target_rewards
+
+
+def load_expert_rollouts(env_name, expert_algo, n_envs, n_eval_episodes, n_expert_demos, norm_reward, seed):
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=norm_reward)
     expert = load_policy(
         f"{expert_algo}-huggingface",
@@ -165,7 +173,6 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
     )
     target_rewards = np.mean(expert_rewards)
     print(f"Target:{target_rewards}")
-
     expert_rollouts = rollout.rollout(
         expert,
         env,
@@ -173,8 +180,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
         rng=default_rng,
         exclude_infos=False,
     )
-    expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
-    return default_rng, env, expert_transitions, target_rewards
+    return default_rng, env, expert_rollouts, target_rewards
 
 
 def load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=False, pre_wrappers=None):

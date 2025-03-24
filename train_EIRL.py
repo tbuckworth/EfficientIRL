@@ -212,6 +212,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False):
         })
     return mean_rew, per_expert, std_err
 
+
 env_names = [
     "seals:seals/Cartpole-v0",
     "seals:seals/Hopper-v1",
@@ -222,11 +223,11 @@ env_names = [
 if __name__ == "__main__":
     for algo in ["eirl"]:
         for n_epochs in [150]:
-            for maximize_reward in [False]:#, True]:
-                for hard in [False]:#, True]:
+            for maximize_reward in [False]:  # , True]:
+                for hard in [False]:  # , True]:
                     for enforce_rew_val_consistency in [False]:
                         for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
-                            for reward_type in ["next state"]:#, "state-action", "next state", "state"]:
+                            for reward_type in ["next state"]:  # , "state-action", "next state", "state"]:
                                 trainEIRL(algo, seed,
                                           n_epochs=n_epochs,
                                           reward_type=reward_type,
@@ -235,8 +236,8 @@ if __name__ == "__main__":
                                           early_learning=False,
                                           learner_timesteps=3000_000,
                                           env_name="seals:seals/Ant-v1",
-                                          override_env_name=None,  #"MountainCar-v0",
-                                          overrides=None,  #{"gravity": 15.0},
+                                          override_env_name=None,  # "MountainCar-v0",
+                                          overrides=None,  # {"gravity": 15.0},
                                           expert_algo="ppo",
                                           hard=hard,
                                           enforce_rew_val_consistency=enforce_rew_val_consistency,
