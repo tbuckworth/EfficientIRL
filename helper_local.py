@@ -271,3 +271,16 @@ def get_latest_model(folder, keyword):
     files = [os.path.join(folder, x) for x in os.listdir(folder)]
     last_checkpoint = max([int(search(x).group(1)) for x in files if search(x)])
     return [x for x in files if re.search(f"model_{keyword}_{last_checkpoint}.pth", x)][0]
+
+
+def filter_params(params, function):
+    import inspect
+    acceptable_params = inspect.signature(function).parameters
+    filtered_params = {k: v for k, v in params.items() if k in acceptable_params}
+    return filtered_params
+
+def init_policy_weights(m):
+    """Mimics SB3’s default policy init: orthogonal for weights, zero for biases."""
+    if isinstance(m, nn.Linear):
+        nn.init.orthogonal_(m.weight.data, gain=1.0)
+        nn.init.constant_(m.bias.data, 0.0)

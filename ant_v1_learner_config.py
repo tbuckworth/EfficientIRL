@@ -5,6 +5,8 @@ from imitation.policies.base import NormalizeFeaturesExtractor
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.sac.policies import SACPolicy
 
+from helper_local import filter_params
+
 
 def load_ant_ppo_learner(env, logdir, policy):
     antv1_params = OrderedDict([('batch_size', 16),
@@ -319,10 +321,65 @@ def load_mountaincar_ppo_learner(wenv, logdir, policy):
 #     return learner
 
 
+def load_swimmer_ppo_learner(wenv, logdir, policy):
+    im_params = OrderedDict([
+        ('batch_size', 8),
+        ('clip_range', 0.1),
+        ('ent_coef', 5.167107294612664e-08),
+        ('gae_lambda', 0.95),
+        ('gamma', 0.999),
+        ('learning_rate', 0.0001214437022727675),
+        ('max_grad_norm', 2),
+        ('n_epochs', 20),
+        ('n_steps', 2048),
+        ('n_timesteps', 1000000.0),
+        ('policy', 'MlpPolicy'),
+        ('vf_coef', 0.6162112311062333),
+    ])
+
+    params = dict(
+        env=wenv,
+        tensorboard_log=logdir,
+        **im_params,
+    )
+    learner = PPO(**params)
+    learner.policy = policy
+    return learner
+
+
+def load_humanoid_ppo_learner(wenv, logdir, policy):
+    im_params = OrderedDict([
+        ('batch_size', 256),
+        ('clip_range', 0.2),
+        ('ent_coef', 2.0745206045994986e-05),
+        ('gae_lambda', 0.92),
+        ('gamma', 0.999),
+        ('learning_rate', 2.0309225666232827e-05),
+        ('max_grad_norm', 0.5),
+        ('n_epochs', 20),
+        ('n_steps', 2048),
+        ('vf_coef', 0.819262464558427),
+        ('policy', 'MlpPolicy'),
+    ])
+
+    params = dict(
+        env=wenv,
+        tensorboard_log=logdir,
+        **im_params,
+    )
+    learner = PPO(**filter_params(params, PPO.__init__))
+    learner.policy = policy
+    return learner
+
+
 def load_learner(env_name, wenv, logdir, policy, rl_algo="ppo"):
     if rl_algo == "ppo":
         if env_name == "seals:seals/Hopper-v1":
             return load_hopper_ppo_learner(wenv, logdir, policy)
+        if env_name == "seals:seals/Swimmer-v1":
+            return load_swimmer_ppo_learner(wenv, logdir, policy)
+        if env_name == "seals:seals/Humanoid-v1":
+            return load_humanoid_ppo_learner(wenv, logdir, policy)
         if env_name == "seals:seals/Ant-v1":
             return load_ant_ppo_learner(wenv, logdir, policy)
         if env_name == "seals:seals/CartPole-v0":

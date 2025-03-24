@@ -1,4 +1,3 @@
-import argparse
 import re
 import time
 import traceback
@@ -8,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from gp import bayesian_optimisation
+from helper_local import filter_params
 
 try:
     import wandb
@@ -116,9 +116,7 @@ def select_next_hyperparameters(X, y, bounds, greater_is_better=True):
 
 def run_next_hyperparameters(hparams):
     from train_EIRL import trainEIRL
-    import inspect
-    acceptable_params = inspect.signature(trainEIRL).parameters
-    filtered_params = {k:v for k,v in hparams.items() if k in acceptable_params}
+    filtered_params = filter_params(hparams, trainEIRL)
     trainEIRL(**filtered_params)
 
 
@@ -187,26 +185,27 @@ def search_eirl():
     fixed = dict(
         algo="eirl",
         seed=[0, 42, 100, 532, 3432],
-        hard=[False, True],
+        hard=False,
         reward_type=["next state", "state", "state-action"],
-        log_prob_adj_reward=[False, True],
+        log_prob_adj_reward=False,
         neg_reward=False,
-        maximize_reward=[False, True],
+        maximize_reward=False,
         rew_const_adj=0,
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["hp1"],
-        early_learning=[False, True],
-        env_name="seals:seals/Ant-v1",
+        extra_tags=["hp2"],
+        early_learning=False,
+        env_name="seals:seals/Humanoid-v1",
         overrides=None,
         expert_algo="ppo",
         override_env_name=None,
-        enforce_rew_val_consistency=[True, False],
+        enforce_rew_val_consistency=False,
+        reset_weights=[True, False],
         norm_reward=[False, True],
-        net_arch=[[256, 256, 256, 256],
-                  [512, 512, 512, 512],
-                  [128, 128, 128, 128],
-                  [64, 128, 256, 64]],
+        net_arch=[[256, 256, 256, 256]]
+                  # [512, 512, 512, 512],
+                  # [128, 128, 128, 128],
+                  # [64, 128, 256, 64]],
     )
     bounds = dict(
         consistency_coef=[100., 1000.],
@@ -221,7 +220,7 @@ def search_eirl():
         lr=[0.00025, 0.0008],
         l2_weight=[0, 0.005],
         batch_size=[48, 96],
-        n_envs=[8, 48],
+        n_envs=[4, 16],
         # enforce_rew_val_consistency=False,
     )
     run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean")

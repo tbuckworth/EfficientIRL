@@ -12,7 +12,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model
+from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
+    init_policy_weights
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -100,6 +101,7 @@ def trainEIRL(algo="eirl",
               norm_reward=True,
               net_arch=None,
               rl_algo="ppo",
+              reset_weights=False,
               ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
@@ -174,6 +176,8 @@ def trainEIRL(algo="eirl",
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides, rew_const_adj)
     learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
+    if reset_weights:
+        learner.policy.apply(init_policy_weights)
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
