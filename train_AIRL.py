@@ -50,14 +50,14 @@ def train_AIRL(
     default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
-    policy = FeedForward32Policy(
-        observation_space = env.observation_space,
-        action_space = env.action_space,
-        lr_schedule = get_schedule_fn(rl_kwargs["learning_rate"]),
-    )
+    # policy = FeedForward32Policy(
+    #     observation_space = env.observation_space,
+    #     action_space = env.action_space,
+    #     lr_schedule = get_schedule_fn(rl_kwargs["learning_rate"]),
+    # )
     learner = PPO(
         env=env,
-        policy=policy,
+        policy=FeedForward32Policy,
         seed=seed,
         **rl_kwargs,
     )
