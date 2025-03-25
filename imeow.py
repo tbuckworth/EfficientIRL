@@ -201,12 +201,10 @@ class InverseMEowLossCalculator:
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
             # This loss just makes sa_rew imitate ns_rew, because we ultimately want to export sa_rew
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
-
-            loss3 = rew_cons_loss
         else:
             # This could be a state reward function or a state action reward function:
             reward_hat = reward_func(obs, one_hot_acts, None, None)
-            loss3 = 0
+            rew_cons_loss = 0
 
         reward_hat = reward_hat + rew_const
 
@@ -218,9 +216,9 @@ class InverseMEowLossCalculator:
             lp_loss = 0
 
         if self.maximize_reward:
-            loss4 = -(reward_hat * log_prob).mean()
+            weighted_rew_loss = -(reward_hat * log_prob).mean()
         else:
-            loss4 = 0
+            weighted_rew_loss = 0
 
         next_value_hat = policy.get_v(nobs).squeeze()
 
@@ -228,7 +226,7 @@ class InverseMEowLossCalculator:
 
         reward_advantage = q_hat - value_hat.squeeze()
 
-        loss1 = -log_prob.mean()
+        kl_loss = -log_prob.mean()
 
         adv_loss = (actor_advantage - reward_advantage).pow(2).mean()
         q_loss = (q_hat - q_val_hat.squeeze()).pow(2).mean()
@@ -254,8 +252,7 @@ class InverseMEowLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + (
-                    adv_loss + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss + rew_adv_loss + q_loss * self.q_coef
+        loss = kl_loss + adv_loss * self.consistency_coef + rew_cons_loss + weighted_rew_loss + lp_loss + l2_loss + rew_adv_loss + q_loss * self.q_coef
 
         reward_correl = None
         if rews is not None:
@@ -334,16 +331,16 @@ class InverseMEowLossCalculator:
             plt.show()
 
         return IMEowTrainingMetrics(
-            kl_loss=loss1,
+            kl_loss=kl_loss,
             consistency_loss=adv_loss,
             q_loss=q_loss,
-            reward_loss=loss3,
+            reward_loss=rew_cons_loss,
             log_prob_rew_loss=lp_loss,
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
             loss=loss,
-            weighted_reward=loss4,
+            weighted_reward=weighted_rew_loss,
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
         )
