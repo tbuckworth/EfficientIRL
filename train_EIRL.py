@@ -190,7 +190,7 @@ def trainEIRL(algo="eirl",
 def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                  override_env_name, overrides):
     try:
-        rew_const_adj = expert_trainer.reward_const.detach()
+        rew_const_adj = expert_trainer.reward_const.detach().cpu().numpy().item()
     except Exception:
         rew_const_adj = 0
     if log_prob_adj_reward:
@@ -238,11 +238,11 @@ if __name__ == "__main__":
             algo="eirl",
             seed=seed,
             rew_const=True,
-            n_expert_demos=5,
+            n_expert_demos=10,
             rl_algo="ppo",
             reset_weights=False,
             model_file=None,
-            n_epochs=100,
+            n_epochs=150,
             reward_type="next state",
             maximize_reward=False,
             extra_tags=["rew_const"],
