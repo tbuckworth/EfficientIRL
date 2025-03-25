@@ -208,18 +208,18 @@ def search_eirl():
     )
     bounds = dict(
         consistency_coef=[100., 1000.],
-        n_epochs=[50, 250],
+        n_epochs=[60, 250],
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
         n_expert_demos=[1, 50],
         learner_timesteps=[2000_000, 5000_000],
-        gamma=[0.8, 0.999],
+        gamma=[0.996],#[0.8, 0.999],
         # training_increments=[5, 10],
         lr=[0.00025, 0.0008],
-        l2_weight=[0, 0.005],
+        l2_weight=[0, 0.002],
         batch_size=[48, 96],
-        n_envs=[4, 16],
+        n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
     run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean")
