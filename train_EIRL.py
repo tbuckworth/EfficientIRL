@@ -94,7 +94,7 @@ def trainEIRL(algo="eirl",
               early_learning=False,
               env_name="seals:seals/Hopper-v1",
               overrides=None,
-              expert_algo="sac",
+              expert_algo=None,
               override_env_name=None,
               enforce_rew_val_consistency=True,
               norm_reward=True,
@@ -105,6 +105,8 @@ def trainEIRL(algo="eirl",
               ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
+    if expert_algo is None:
+        expert_algo = env_expert_algos[env_name]
 
     tags = [] + (extra_tags if extra_tags is not None else [])
     logdir = create_logdir(env_name, seed)
@@ -221,7 +223,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False, callback=Non
     return mean_rew, per_expert, std_err
 
 
-env_names = {
+env_expert_algos = {
     "seals:seals/Cartpole-v0": "ppo",
     "seals:seals/Hopper-v1": "sac",
     "seals:seals/Ant-v1": "ppo",
@@ -232,12 +234,13 @@ env_names = {
 }
 
 if __name__ == "__main__":
+    # logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0"
     model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
     for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
         trainEIRL(
             algo="eirl",
             seed=seed,
-            rew_const=True,
+            rew_const=False,
             n_expert_demos=10,
             rl_algo="ppo",
             reset_weights=False,

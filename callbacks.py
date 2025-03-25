@@ -86,13 +86,13 @@ class RewardLoggerCallback(BaseCallback):
         dones = self.locals.get("dones")
 
         each_rew = np.array([[v for k,v in info.items() if re.search("rew",k)] for info in infos]).T
-        all_rew = np.concatenate((each_rew, rewards))
+        all_rew = np.concatenate((each_rew, rewards[None,...]))
         if self._step_rews is None:
             self._step_rews = all_rew
             self._rew_names = [k for k, v in infos[0].items() if re.search("rew", k)]
         else:
-            self._step_rews = np.concatenate((self._step_rews, all_rew))[-200:]
-            if len(self._step_rews)>100:
+            self._step_rews = np.concatenate((self._step_rews, all_rew))[-500:]
+            if len(self._step_rews)>495:
                 wandb.log({f"correls/{k}":v for k,v in zip(self._rew_names, np.corrcoef(self._step_rews)[..., -1].tolist())})
 
         # Update reward sums for each env
