@@ -242,6 +242,8 @@ if __name__ == "__main__":
         trainIMEow(
             algo="imeow",
             seed=seed,
+            consistency_coef=0.,
+            q_coef=1.,
             n_expert_demos=10,
             rl_algo="ppo",
             model_file=None,
