@@ -21,10 +21,10 @@ from helper_local import import_wandb
 #     from cleanrl.nf.distributions import ConditionalDiagLinearGaussian
 #     from cleanrl.nf.flows import MaskedCondAffineFlow, CondScaling
 # except:
-from nf.nets import MLP
-from nf.transforms import Preprocessing
-from nf.distributions import ConditionalDiagLinearGaussian
-from nf.flows import MaskedCondAffineFlow, CondScaling
+from .nf.nets import MLP
+from .nf.transforms import Preprocessing
+from .nf.distributions import ConditionalDiagLinearGaussian
+from .nf.flows import MaskedCondAffineFlow, CondScaling
 from private_login import wandb_login
 
 
@@ -160,6 +160,11 @@ class FlowPolicy(nn.Module):
         flows, q0 = init_Flow(sigma_max, sigma_min, action_sizes, state_sizes)
         self.flows = nn.ModuleList(flows).to(self.device)
         self.prior = q0.to(self.device)
+
+    def predict(self, obs, state=None, episode_start=None, deterministic=None):
+        with torch.no_grad():
+            a, _ = self.sample(num_samples=obs.shape[0], obs=obs, deterministic=deterministic)
+        return a.cpu().numpy(), state
 
     def forward(self, obs, act):
         log_q = torch.zeros(act.shape[0], dtype=act.dtype, device=act.device)

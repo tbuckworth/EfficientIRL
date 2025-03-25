@@ -130,8 +130,9 @@ def evaluate_actions(policy, obs, actions) -> tuple[Any, Any, Any]:
         and entropy of the action distribution.
     """
     log_prob = policy.log_prob(obs, actions)
-    q_vals, values = policy.get_qv(torch.cat((obs, obs), dim=0))
-
+    q_vals, values = policy.get_qv(obs, actions)
+    # Technically, these should be the same:
+    #torch.corrcoef(torch.cat((adv, log_prob.unsqueeze(-1)), dim=-1).T)
     return q_vals, values, log_prob
 
 
@@ -188,7 +189,7 @@ class InverseMEowLossCalculator:
         obs = obs.to(th.float32)
         nobs = nobs.to(th.float32)
 
-        q_val_hat = value_hat, log_prob = evaluate_actions(policy, obs, acts)
+        q_val_hat, value_hat, log_prob = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
 
         if self.reward_type == "next state":
@@ -221,7 +222,7 @@ class InverseMEowLossCalculator:
         else:
             loss4 = 0
 
-        next_value_hat = policy.get_v(torch.cat((nobs, nobs), dim=0)).squeeze()
+        next_value_hat = policy.get_v(nobs).squeeze()
 
         q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
 
@@ -230,7 +231,7 @@ class InverseMEowLossCalculator:
         loss1 = -log_prob.mean()
 
         adv_loss = (actor_advantage - reward_advantage).pow(2).mean()
-        q_loss = (q_hat - q_val_hat).pow(2).mean()
+        q_loss = (q_hat - q_val_hat.squeeze()).pow(2).mean()
 
         prob_true_act = th.exp(log_prob).mean()
 
@@ -541,13 +542,14 @@ class IMEow(algo_base.DemonstrationAlgorithm):
 
         self.rng = rng
         self.param_list = []
+        dev = utils.get_device(device)
         if policy is None:
             policy = FlowPolicy(alpha=alpha,
                                 sigma_max=sigma_max,
                                 sigma_min=sigma_min,
-                                action_sizes=action_space.shape[1],
-                                state_sizes=observation_space.shape[1],
-                                device=device).to(device)
+                                action_sizes=action_space.shape[-1],
+                                state_sizes=observation_space.shape[-1],
+                                device=dev).to(dev)
         self.lp_adj_reward = self.state_reward_func = None
         if reward_func is None:
             if preprocessing.is_image_space(observation_space):
@@ -569,7 +571,7 @@ class IMEow(algo_base.DemonstrationAlgorithm):
                                                  use_next_state=False,
                                                  use_done=False,
                                                  )
-                self.state_reward_func = state_reward_func.to(utils.get_device(device))
+                self.state_reward_func = state_reward_func.to(dev)
                 self.param_list += list(self.state_reward_func.parameters())
             elif reward_type == "state":
                 reward_func = reward_constructor(observation_space=observation_space,
@@ -596,15 +598,15 @@ class IMEow(algo_base.DemonstrationAlgorithm):
                                                    use_next_state=False,
                                                    use_done=False,
                                                    )
-                self.lp_adj_reward = lp_adj_reward.to(utils.get_device(device))
+                self.lp_adj_reward = lp_adj_reward.to(dev)
                 self.param_list += list(self.lp_adj_reward.parameters())
-        self.reward_func = reward_func.to(utils.get_device(device))
+        self.reward_func = reward_func.to(dev)
         self.param_list += list(self.reward_func.parameters())
         self.reward_const = 0
         if rew_const:
-            self.reward_const = nn.Parameter(th.tensor([0.], device=utils.get_device(device)))
+            self.reward_const = nn.Parameter(th.tensor([0.], device=dev))
             self.param_list += [self.reward_const]
-        self._policy = policy.to(utils.get_device(device))
+        self._policy = policy.to(dev)
         self.param_list += list(self.policy.parameters())
         if optimizer_kwargs:
             if "weight_decay" in optimizer_kwargs:  # pragma: no cover
