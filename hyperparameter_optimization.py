@@ -207,8 +207,8 @@ def search_eirl():
                   # [64, 128, 256, 64]],
     )
     bounds = dict(
-        consistency_coef=[100., 1000.],
-        n_epochs=[60, 250],
+        consistency_coef=[0.1, 1000.],
+        n_epochs=[60, 500],
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
