@@ -134,6 +134,7 @@ class TestHopperLearner(unittest.TestCase):
                 video_length=video_length,
                 name_prefix="1.25"
             )
+
     def test_record_video(self):
         obs, _ = self.vid_env.reset()
         cum_reward = 0

@@ -15,6 +15,7 @@ import torch.nn as nn
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
+from stable_baselines3 import TD3
 from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -162,12 +163,15 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
 
 def load_expert_rollouts(env_name, expert_algo, n_envs, n_eval_episodes, n_expert_demos, norm_reward, seed):
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=norm_reward)
-    expert = load_policy(
-        f"{expert_algo}-huggingface",
-        organization="HumanCompatibleAI",
-        env_name=env_name,
-        venv=env,
-    )
+    if expert_algo == "td3" and env_name == "seals:seals/Hopper-v1":
+        expert = load_hopper_td3_expert(env)
+    else:
+        expert = load_policy(
+            f"{expert_algo}-huggingface",
+            organization="HumanCompatibleAI",
+            env_name=env_name,
+            venv=env,
+        )
     expert_rewards, _ = evaluate_policy(
         expert, env, n_eval_episodes, return_episode_rewards=True
     )
@@ -284,3 +288,14 @@ def init_policy_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data, gain=1.0)
         nn.init.constant_(m.bias.data, 0.0)
+
+
+def load_td3_agent(env, logdir):
+    model_file = get_latest_model(logdir, "RL")
+    learner = TD3('MlpPolicy', env)
+    policy = learner.policy
+    policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
+    return policy
+
+def load_hopper_td3_expert(env):
+    return load_td3_agent(env, "logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")
