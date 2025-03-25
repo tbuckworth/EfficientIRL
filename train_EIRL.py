@@ -221,40 +221,38 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False, callback=Non
     return mean_rew, per_expert, std_err
 
 
-env_names = [
-    "seals:seals/Cartpole-v0",
-    "seals:seals/Hopper-v1",
-    "seals:seals/Ant-v1",
-    "seals:seals/MountainCar-v0",
-]
+env_names = {
+    "seals:seals/Cartpole-v0": "ppo",
+    "seals:seals/Hopper-v1": "sac",
+    "seals:seals/Ant-v1": "ppo",
+    "seals:seals/MountainCar-v0": "ppo",
+    "seals:seals/Humanoid-v1": "ppo",
+    "seals:seals/Walker2d-v0": "sac",
+    "seals:seals/HalfCheetah-v0": "ppo",
+}
 
 if __name__ == "__main__":
     model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
-    for algo in ["eirl"]:
-        for n_epochs in [0]:
-            for maximize_reward in [False]:  # , True]:
-                for hard in [False]:  # , True]:
-                    for enforce_rew_val_consistency in [False]:
-                        for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
-                            for reward_type in ["next state"]:  # , "state-action", "next state", "state"]:
-                                trainEIRL(
-                                    algo, seed,
-                                    n_expert_demos=1,
-                                    rl_algo="ppo",
-                                    reset_weights=True,
-                                    model_file=model_file,
-                                    n_epochs=n_epochs,
-                                    reward_type=reward_type,
-                                    maximize_reward=maximize_reward,
-                                    extra_tags=["Hop"],
-                                    early_learning=False,
-                                    learner_timesteps=3000_000,
-                                    env_name="seals:seals/Hopper-v1",
-                                    override_env_name=None,  # "MountainCar-v0",
-                                    overrides=None,  # {"gravity": 15.0},
-                                    expert_algo="sac",
-                                    hard=hard,
-                                    enforce_rew_val_consistency=enforce_rew_val_consistency,
-                                    norm_reward=False,
-                                    # n_expert_demos=1,
-                                )
+    for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
+        trainEIRL(
+            algo="eirl",
+            seed=seed,
+            rew_const=True,
+            n_expert_demos=5,
+            rl_algo="ppo",
+            reset_weights=False,
+            model_file=None,
+            n_epochs=100,
+            reward_type="next state",
+            maximize_reward=False,
+            extra_tags=["rew_const"],
+            early_learning=False,
+            learner_timesteps=3000_000,
+            env_name="seals:seals/Hopper-v1",
+            override_env_name=None,  # "MountainCar-v0",
+            overrides=None,  # {"gravity": 15.0},
+            expert_algo="sac",
+            hard=False,
+            enforce_rew_val_consistency=False,
+            norm_reward=False,
+        )

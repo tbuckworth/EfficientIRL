@@ -25,6 +25,7 @@ def train_AIRL(
         n_expert_demos=60,
         n_envs=16,
         tags=None,
+        timesteps_override=None,
 ):
     if tags is None:
         tags = []
@@ -40,7 +41,7 @@ def train_AIRL(
     gen_replay_buffer_capacity = cfg['algorithm_kwargs']['gen_replay_buffer_capacity']
     demo_batch_size = cfg['algorithm_kwargs']['demo_batch_size']
     rl_kwargs = cfg['rl']['rl_kwargs']
-    total_timesteps = cfg['total_timesteps']
+    total_timesteps = timesteps_override or cfg['total_timesteps']
 
     logdir = create_logdir(env_name, seed)
     np.save(os.path.join(logdir, "config.npy"), wandb_config)
@@ -50,11 +51,7 @@ def train_AIRL(
     default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
-    # policy = FeedForward32Policy(
-    #     observation_space = env.observation_space,
-    #     action_space = env.action_space,
-    #     lr_schedule = get_schedule_fn(rl_kwargs["learning_rate"]),
-    # )
+
     learner = PPO(
         env=env,
         policy=FeedForward32Policy,
@@ -76,13 +73,15 @@ def train_AIRL(
         reward_net=reward_net,
         custom_logger=custom_logger,
         init_tensorboard=True,
-        allow_variable_horizon=False,  # TODO - what do we really want here?
+        allow_variable_horizon=False,
     )
     expert_trainer.train(total_timesteps=total_timesteps)
 
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
+    wandb.finish()
 
 
 if __name__ == '__main__':
     for seed in [0, 42, 100, 50, 35]:
-        train_AIRL(env_name="seals:seals/Ant-v1")
+        train_AIRL(env_name="seals:seals/Ant-v1",
+                   timesteps_override=2e7,)

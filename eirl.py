@@ -636,7 +636,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
         self.param_list += list(self.reward_func.parameters())
         self.reward_const = 0
         if rew_const:
-            self.reward_const = nn.Parameter(th.tensor([0.])).to(utils.get_device(device))
+            self.reward_const = nn.Parameter(th.tensor([0.], device=utils.get_device(device)))
             self.param_list += [self.reward_const]
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
