@@ -24,6 +24,7 @@ import numpy as np
 import torch
 import torch as th
 import torch.utils.data as th_data
+import torch.nn as nn
 import tqdm
 from imitation.rewards.reward_nets import RewardNet, CnnRewardNet, BasicRewardNet
 from matplotlib import pyplot as plt
@@ -160,7 +161,7 @@ class EfficientIRLLossCalculator:
     l2_weight: float
     consistency_coef: float
     hard: bool
-    reward_type: bool
+    reward_type: str
     maximize_reward: bool
     log_prob_adj_reward: bool
     enforce_rew_val_consistency: bool
@@ -187,6 +188,7 @@ class EfficientIRLLossCalculator:
             dones: Union[th.Tensor, np.ndarray],
             rews: Union[th.Tensor, np.ndarray] = None,
             one_hot_acts: Union[th.Tensor, np.ndarray] = None,
+            rew_const: Union[th.Tensor, np.ndarray] = 0,
     ) -> EIRLTrainingMetrics:
         """Calculate the supervised learning loss used to train the behavioral clone.
 
@@ -234,6 +236,7 @@ class EfficientIRLLossCalculator:
             reward_hat = reward_func(obs, one_hot_acts, None, None)
             loss3 = 0
 
+        reward_hat = reward_hat + rew_const
 
         if self.log_prob_adj_reward:
             lp_rew = lp_adj_reward(obs, one_hot_acts, None, None)
@@ -513,6 +516,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             maximize_reward=False,
             log_prob_adj_reward=False,
             enforce_rew_val_consistency=False,
+            rew_const=False,
     ):
         """Builds EIRL.
 
@@ -563,7 +567,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
         self.observation_space = observation_space
 
         self.rng = rng
-
+        self.param_list = []
         if policy is None:
             extractor = (
                 torch_layers.CombinedExtractor
@@ -600,6 +604,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                                                  use_done=False,
                                                  )
                 self.state_reward_func = state_reward_func.to(utils.get_device(device))
+                self.param_list += list(self.state_reward_func.parameters())
             elif reward_type == "state":
                 reward_func = reward_constructor(observation_space=observation_space,
                                                  action_space=action_space,
@@ -626,18 +631,24 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                                                    use_done=False,
                                                    )
                 self.lp_adj_reward = lp_adj_reward.to(utils.get_device(device))
+                self.param_list += list(self.lp_adj_reward.parameters())
         self.reward_func = reward_func.to(utils.get_device(device))
+        self.param_list += list(self.reward_func.parameters())
+        self.reward_const = 0
+        if rew_const:
+            self.reward_const = nn.Parameter(th.tensor([0.])).to(utils.get_device(device))
+            self.param_list += [self.reward_const]
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
         assert self.policy.observation_space == self.observation_space
         assert self.policy.action_space == self.action_space
-
+        self.param_list += list(self.policy.parameters())
         if optimizer_kwargs:
             if "weight_decay" in optimizer_kwargs:  # pragma: no cover
                 raise ValueError("Use the parameter l2_weight instead of weight_decay.")
         optimizer_kwargs = optimizer_kwargs or {}
         self.optimizer = optimizer_cls(
-            self.policy.parameters(),
+            self.param_list,
             **optimizer_kwargs,
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
@@ -792,7 +803,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
 
             training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func,
                                                     self.lp_adj_reward, obs_tensor,
-                                                    acts, nobs_tensor, dones, rews, one_hot_acts)
+                                                    acts, nobs_tensor, dones, rews, one_hot_acts, self.reward_const)
 
             # Renormalise the loss to be averaged over the whole
             # batch size instead of the minibatch size.

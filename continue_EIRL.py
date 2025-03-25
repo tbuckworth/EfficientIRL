@@ -50,7 +50,7 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
     expert_trainer = load_expert_trainer(policy, cfg, sup_model_file, default_rng, env, expert_transitions)
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
-                                             override_env_name, overrides, rew_const_adj)
+                                             override_env_name, overrides)
 
     logdir = create_logdir(env_name, seed)
     np.save(os.path.join(logdir, "config.npy"), cfg)

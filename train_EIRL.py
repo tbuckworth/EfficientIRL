@@ -81,7 +81,6 @@ def trainEIRL(algo="eirl",
               log_prob_adj_reward=False,
               neg_reward=False,
               maximize_reward=False,
-              rew_const_adj=0,
               learner_timesteps=1000_000,
               gamma=0.995,
               training_increments=5,
@@ -102,6 +101,7 @@ def trainEIRL(algo="eirl",
               net_arch=None,
               rl_algo="ppo",
               reset_weights=False,
+              rew_const=False,
               ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
@@ -138,6 +138,7 @@ def trainEIRL(algo="eirl",
             maximize_reward=maximize_reward,
             log_prob_adj_reward=log_prob_adj_reward,
             enforce_rew_val_consistency=enforce_rew_val_consistency,
+            rew_const=rew_const,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(
@@ -174,7 +175,7 @@ def trainEIRL(algo="eirl",
         wandb.finish()
         return
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
-                                             override_env_name, overrides, rew_const_adj)
+                                             override_env_name, overrides)
     learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
     if reset_weights:
         learner.policy.apply(init_policy_weights)
@@ -187,7 +188,11 @@ def trainEIRL(algo="eirl",
 
 
 def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
-                                 override_env_name, overrides, rew_const_adj):
+                                 override_env_name, overrides):
+    try:
+        rew_const_adj = expert_trainer.reward_const.detach()
+    except Exception:
+        rew_const_adj = 0
     if log_prob_adj_reward:
         rfunc = expert_trainer.lp_adj_reward
     else:
@@ -196,9 +201,7 @@ def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_rew
         if override_env_name is None:
             override_env_name = env_name
         env = overridden_vec_env(override_env_name, n_envs, overrides)
-        wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
-    else:
-        wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
+    wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
     return env, wenv
 
 
@@ -226,7 +229,7 @@ env_names = [
 ]
 
 if __name__ == "__main__":
-    model_file = get_latest_model("logs/train/seals:seals/Ant-v1/2025-03-22__05-15-35__seed_0", "SUP")
+    model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
     for algo in ["eirl"]:
         for n_epochs in [0]:
             for maximize_reward in [False]:  # , True]:
@@ -237,18 +240,19 @@ if __name__ == "__main__":
                                 trainEIRL(
                                     algo, seed,
                                     n_expert_demos=1,
-                                    rl_algo="sac",
+                                    rl_algo="ppo",
+                                    reset_weights=True,
                                     model_file=model_file,
                                     n_epochs=n_epochs,
                                     reward_type=reward_type,
                                     maximize_reward=maximize_reward,
-                                    extra_tags=["ant"],
+                                    extra_tags=["Hop"],
                                     early_learning=False,
                                     learner_timesteps=3000_000,
-                                    env_name="seals:seals/Ant-v1",
+                                    env_name="seals:seals/Hopper-v1",
                                     override_env_name=None,  # "MountainCar-v0",
                                     overrides=None,  # {"gravity": 15.0},
-                                    expert_algo="ppo",
+                                    expert_algo="sac",
                                     hard=hard,
                                     enforce_rew_val_consistency=enforce_rew_val_consistency,
                                     norm_reward=False,
