@@ -1,4 +1,5 @@
 import numpy as np
+import re
 from stable_baselines3.common.callbacks import BaseCallback
 
 
@@ -69,6 +70,8 @@ class RewardLoggerCallback(BaseCallback):
         # Per-env accumulators for current episode
         self._orig_sum = None
         self._learned_sum = None
+        self._step_rews = None
+        self._rew_names = None
 
     def _on_training_start(self) -> None:
         """Initialize per-environment reward accumulators."""
@@ -81,12 +84,17 @@ class RewardLoggerCallback(BaseCallback):
         infos = self.locals.get("infos")
         rewards = self.locals.get("rewards")
         dones = self.locals.get("dones")
-        if False:
-            import re
-            rew_names = [k for k, v in infos[0].items() if re.search("rew",k)]
-            all_rew = np.array([[v for k,v in info.items() if re.search("rew",k)] for info in infos]).T
-            rew_names
-            np.corrcoef(all_rew, rewards)[:-1, -1]
+
+        each_rew = np.array([[v for k,v in info.items() if re.search("rew",k)] for info in infos]).T
+        all_rew = np.concatenate((each_rew, rewards))
+        if self._step_rews is None:
+            self._step_rews = all_rew
+            self._rew_names = [k for k, v in infos[0].items() if re.search("rew", k)]
+        else:
+            self._step_rews = np.concatenate((self._step_rews, all_rew))[-200:]
+            if len(self._step_rews)>100:
+                wandb.log({f"correls/{k}":v for k,v in zip(self._rew_names, np.corrcoef(self._step_rews)[..., -1].tolist())})
+
         # Update reward sums for each env
         for i, info in enumerate(infos):
             # Add current step rewards to accumulators
