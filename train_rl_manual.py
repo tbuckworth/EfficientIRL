@@ -2,37 +2,51 @@ import os
 import numpy as np
 import torch
 from imitation.util import logger as imit_logger
-from stable_baselines3 import TD3
+from stable_baselines3 import TD3, PPO, SAC
 from helper_local import import_wandb, create_logdir, load_env, get_config, load_td3_agent
 from gymnasium.wrappers import RecordVideo
 import gymnasium as gym
 
 wandb = import_wandb()
 
+agents = {
+    "TD3": TD3,
+    "PPO": PPO,
+    "SAC": SAC,
+}
+
 def trainRL(
             seed=42,
-            learner_timesteps=8000_000,
+            learner_timesteps=500_000,
             n_envs=16,
             extra_tags=None,
-            env_name="seals:seals/Hopper-v1",
+            env_name="seals:seals/CartPole-v0",
             ):
-    algo = "TD3"
+    algo = "PPO"
     tags = [] + (extra_tags if extra_tags is not None else [])
+    cfg = locals()
+    rl_kwargs = dict(
+        learning_rate=0.0003,
+        batch_size=256,
+        # gradient_steps=1,
+        # learning_starts=10000,
+        # train_freq=1,
+    )
+    cfg.update(rl_kwargs)
+
+    AGENT = agents[algo]
+
     logdir = create_logdir(env_name, seed)
-    np.save(os.path.join(logdir, "config.npy"), locals())
-    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
+    np.save(os.path.join(logdir, "config.npy"), cfg)
+    wandb.init(project="EfficientIRL", sync_tensorboard=True, config=cfg, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=False)
 
-    learner = TD3('MlpPolicy',
+    learner = AGENT('MlpPolicy',
                   env,
-                  learning_rate=0.0003,
-                  batch_size=256,
-                  gradient_steps=1,
-                  learning_starts=10000,
-                  train_freq=1,
                   tensorboard_log=logdir,
+                  **rl_kwargs,
                   )
 
     learner.learn(learner_timesteps)
@@ -85,5 +99,5 @@ def record_video(logdir):
 
 
 if __name__ == "__main__":
-    record_video("logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")
-    # trainRL(extra_tags=["TD3","Train","RL"])
+    # record_video("logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")
+    trainRL(extra_tags=["PPO","Train","RL"])
