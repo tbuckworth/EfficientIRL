@@ -14,6 +14,7 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
+from helper_local import import_wandb
 # try:
 #     from cleanrl.nf.nets import MLP
 #     from cleanrl.nf.transforms import Preprocessing
@@ -24,6 +25,8 @@ from nf.nets import MLP
 from nf.transforms import Preprocessing
 from nf.distributions import ConditionalDiagLinearGaussian
 from nf.flows import MaskedCondAffineFlow, CondScaling
+from private_login import wandb_login
+
 
 @dataclass
 class Args:
@@ -35,9 +38,9 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = False
+    track: bool = True
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
+    wandb_project_name: str = "EfficientIRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -406,5 +409,191 @@ def train(args=None):
     envs.close()
     writer.close()
 
+
+def inverse_train(args=None):
+    import stable_baselines3 as sb3
+
+    if sb3.__version__ < "2.0":
+        raise ValueError(
+            """Ongoing migration: run the following command to install the new dependencies:
+            poetry run pip install "stable_baselines3==2.0.0a1"
+            """
+        )
+
+    if args is not None:
+        run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+        writer = SummaryWriter(args.description)
+    else:
+        args = tyro.cli(Args)
+        run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+        args.description = f"runs/{run_name}"
+        writer = SummaryWriter(f"runs/{run_name}")
+
+    if args.track:
+        wandb = import_wandb()
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
+
+    writer.add_text(
+        "hyperparameters",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
+
+    # TRY NOT TO MODIFY: seeding
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
+
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+
+    # Setup the training and testing environment
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    test_envs = gym.make_vec(args.env_id, num_envs=10)
+    test_envs = gym.wrappers.RescaleAction(test_envs, min_action=-1.0, max_action=1.0)
+    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+
+    max_action = float(envs.single_action_space.high[0])
+
+    policy = FlowPolicy(alpha=args.alpha,
+                        sigma_max=args.sigma_max,
+                        sigma_min=args.sigma_min,
+                        action_sizes=envs.action_space.shape[1],
+                        state_sizes=envs.observation_space.shape[1],
+                        device=device).to(device)
+    policy_target = FlowPolicy(alpha=args.alpha,
+                               sigma_max=args.sigma_max,
+                               sigma_min=args.sigma_min,
+                               action_sizes=envs.action_space.shape[1],
+                               state_sizes=envs.observation_space.shape[1],
+                               device=device).to(device)
+    policy_target.load_state_dict(policy.state_dict())
+    q_optimizer = optim.Adam(policy.parameters(), lr=args.q_lr)
+
+    # Automatic entropy tuning
+    if args.autotune:
+        target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
+        log_alpha = torch.zeros(1, requires_grad=True, device=device)
+        alpha = log_alpha.exp().item()
+        a_optimizer = optim.Adam([log_alpha], lr=args.q_lr)
+    else:
+        alpha = args.alpha
+
+    envs.single_observation_space.dtype = np.float32
+    rb = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        handle_timeout_termination=False,
+    )
+    start_time = time.time()
+
+    best_test_rewards = -np.inf
+    # TRY NOT TO MODIFY: start the game
+    obs, _ = envs.reset(seed=args.seed)
+    for global_step in range(args.total_timesteps):
+        # ALGO LOGIC: put action logic here
+        if global_step < args.learning_starts:
+            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+        else:
+            policy.eval()
+            actions, _ = policy.sample(num_samples=obs.shape[0], obs=obs, deterministic=False)
+            actions = actions.detach().cpu().numpy()
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        next_obs, rewards, terminations, truncations, infos = envs.step(actions)
+
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        if "final_info" in infos:
+            for info in infos["final_info"]:
+                print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
+                writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                break
+
+        # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+        real_next_obs = next_obs.copy()
+        for idx, trunc in enumerate(truncations):
+            if trunc:
+                real_next_obs[idx] = infos["final_observation"][idx]
+        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+
+        # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+        obs = next_obs
+
+        # ALGO LOGIC: training.
+        if global_step > args.learning_starts:
+            data = rb.sample(args.batch_size)
+            with torch.no_grad():
+                # speed up training by removing true_v and min_q
+                policy_target.eval()
+                v_old = policy_target.get_v(torch.cat((data.next_observations, data.next_observations), dim=0))
+                exact_v_old = torch.min(v_old[:v_old.shape[0] // 2], v_old[v_old.shape[0] // 2:])
+                target_q = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (exact_v_old).view(-1)
+
+            policy.train()  # for dropout
+            current_q1, _ = policy.get_qv(torch.cat((data.observations, data.observations), dim=0),
+                                          torch.cat((data.actions, data.actions), dim=0))
+            target_q = torch.cat((target_q, target_q), dim=0)
+            qf_loss = F.mse_loss(current_q1.flatten(), target_q.flatten())
+            qf_loss[qf_loss != qf_loss] = 0.0
+            qf_loss = qf_loss.mean()
+
+            # optimize the model
+            q_optimizer.zero_grad()
+            qf_loss.backward()
+            if args.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), args.grad_clip)
+            q_optimizer.step()
+
+            if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+                for _ in range(
+                        args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                    if args.autotune:
+                        with torch.no_grad():
+                            policy.eval()  # for dropout
+                            _, log_pi = policy.sample(num_samples=data.observations.shape[0], obs=data.observations,
+                                                      deterministic=args.deterministic_action)
+                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+
+                        a_optimizer.zero_grad()
+                        alpha_loss.backward()
+                        a_optimizer.step()
+                        alpha = log_alpha.exp().item()
+
+            # update the target networks
+            if global_step % args.target_network_frequency == 0:
+                for param, target_param in zip(policy.parameters(), policy_target.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+
+            if global_step % 1000 == 0:
+                writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
+                writer.add_scalar("losses/alpha", alpha, global_step)
+                print("SPS:", int(global_step / (time.time() - start_time)))
+                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+                if args.autotune:
+                    writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+
+            if global_step % 10000 == 0:
+                test_rewards = evaluate(test_envs, policy, deterministic=args.deterministic_action, device=device)
+                writer.add_scalar("Test/return", test_rewards, global_step)
+                writer.add_scalar("Steps", global_step, global_step)
+                if test_rewards > best_test_rewards:
+                    best_test_rewards = test_rewards
+                    torch.save(policy, os.path.join(f"{args.description}", 'test_rewards.pt'))
+                    print(
+                        f"save agent to: {args.description} with best return {best_test_rewards} at step {global_step}")
+
+    envs.close()
+    writer.close()
+
 if __name__ == '__main__':
-    train()
+    inverse_train()
