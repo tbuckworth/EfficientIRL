@@ -84,4 +84,4 @@ def train_AIRL(
 if __name__ == '__main__':
     for seed in [0, 42, 100, 50, 35]:
         train_AIRL(env_name="seals:seals/Ant-v1",
-                   timesteps_override=2e7,)
+                   timesteps_override=int(2e7),)
