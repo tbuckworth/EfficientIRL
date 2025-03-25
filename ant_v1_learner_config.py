@@ -63,7 +63,7 @@ def load_ant_ppo_learner(env, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**ant_params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
@@ -114,12 +114,12 @@ def load_ant_sac_learner(env, logdir, policy):
         _init_setup_model=True,
     )
     learner = SAC(**params)
-
-    # could be just features_extractor and not pi - check eirl
-    learner.policy.actor.features_extractor.load_state_dict(policy.pi_features_extractor.state_dict())
-    learner.policy.actor.latent_pi.load_state_dict(policy.mlp_extractor.policy_net.state_dict())
-    learner.policy.actor.mu.load_state_dict(policy.action_net.state_dict())
-    learner.policy.actor.log_std.load_state_dict(policy.log_std_net.state_dict())
+    if policy is not None:
+        # could be just features_extractor and not pi - check eirl
+        learner.policy.actor.features_extractor.load_state_dict(policy.pi_features_extractor.state_dict())
+        learner.policy.actor.latent_pi.load_state_dict(policy.mlp_extractor.policy_net.state_dict())
+        learner.policy.actor.mu.load_state_dict(policy.action_net.state_dict())
+        learner.policy.actor.log_std.load_state_dict(policy.log_std_net.state_dict())
 
     return learner
 
@@ -186,7 +186,7 @@ def load_hopper_ppo_learner(env, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
@@ -235,7 +235,7 @@ def load_cartpole_ppo_learner(wenv, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
@@ -271,7 +271,7 @@ def load_pendulum_ppo_learner(wenv, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
@@ -307,18 +307,9 @@ def load_mountaincar_ppo_learner(wenv, logdir, policy):
         _init_setup_model=True,
     )
     learner = PPO(**params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
-
-# def load_ant_sac_learner(wenv, logdir, policy):
-#     learner = SAC(
-#         'MlpPolicy',
-#         wenv,
-#         tensorboard_log=logdir,
-#     )
-#     learner.policy
-#     return learner
 
 
 def load_swimmer_ppo_learner(wenv, logdir, policy):
@@ -343,7 +334,7 @@ def load_swimmer_ppo_learner(wenv, logdir, policy):
         **im_params,
     )
     learner = PPO(**params)
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
@@ -368,7 +359,7 @@ def load_humanoid_ppo_learner(wenv, logdir, policy):
         **im_params,
     )
     learner = PPO(**filter_params(params, PPO.__init__))
-    learner.policy = policy
+    learner.policy = policy or learner.policy
     return learner
 
 
