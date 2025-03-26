@@ -41,6 +41,7 @@ class CustomVecEpisodeStatsCallback(BaseCallback):
         avg_reward = np.mean(self.total_rewards)
         print(f"Training Finished - Avg Reward: {avg_reward}")
 
+
 #
 # # Usage in SB3 training
 # from stable_baselines3 import PPO
@@ -59,6 +60,7 @@ import numpy as np
 from collections import deque
 from stable_baselines3.common.callbacks import BaseCallback
 import wandb
+
 
 class RewardLoggerCallback(BaseCallback):
     def __init__(self, verbose=0, reward_window=100):
@@ -83,21 +85,30 @@ class RewardLoggerCallback(BaseCallback):
         self.num_timesteps = num_timesteps
         return self._on_step()
 
+    def cust_training_start(self, locals_, globals_, n_envs) -> None:
+        # Those are reference and will be updated automatically
+        self.locals = locals_
+        self.globals = globals_
+        self.num_timesteps = 0
+        self._orig_sum = np.zeros(n_envs)
+        self._learned_sum = np.zeros(n_envs)
+
     def _on_step(self) -> bool:
         # infos, rewards, and dones for each parallel env at this step
         infos = self.locals.get("infos")
         rewards = self.locals.get("rewards")
         dones = self.locals.get("dones")
 
-        each_rew = np.array([[v for k,v in info.items() if re.search("rew",k)] for info in infos]).T
-        all_rew = np.concatenate((each_rew, rewards[None,...]))
+        each_rew = np.array([[v for k, v in info.items() if re.search("rew", k)] for info in infos]).T
+        all_rew = np.concatenate((each_rew, rewards[None, ...]))
         if self._step_rews is None:
             self._step_rews = all_rew
             self._rew_names = [k for k, v in infos[0].items() if re.search("rew", k)]
         else:
             self._step_rews = np.concatenate((self._step_rews, all_rew))[-500:]
-            if len(self._step_rews)>495:
-                wandb.log({f"correls/{k}":v for k,v in zip(self._rew_names, np.corrcoef(self._step_rews)[..., -1].tolist())})
+            if len(self._step_rews) > 495:
+                wandb.log({f"correls/{k}": v for k, v in
+                           zip(self._rew_names, np.corrcoef(self._step_rews)[..., -1].tolist())})
 
         # Update reward sums for each env
         for i, info in enumerate(infos):
@@ -115,14 +126,15 @@ class RewardLoggerCallback(BaseCallback):
                 self.original_ep_returns.append(ep_orig_return)
                 self.learned_ep_returns.append(ep_learned_return)
                 if self.verbose:
-                    print(f"[Episode End] Env {i}: Original Return={ep_orig_return:.2f}, Learned Return={ep_learned_return:.2f}")
+                    print(
+                        f"[Episode End] Env {i}: Original Return={ep_orig_return:.2f}, Learned Return={ep_learned_return:.2f}")
                 # Reset for next episode
                 # info["episode"]["r"]
                 self._orig_sum[i] = 0.0
                 self._learned_sum[i] = 0.0
         # If any episodes finished, log the average returns over recent episodes
         episodes_logged = len(self.original_ep_returns)  # total episodes recorded so far
-        if episodes_logged > 0 and ( "episode" in infos[-1] or True in dones ):
+        if episodes_logged > 0 and ("episode" in infos[-1] or True in dones):
             # Compute mean over the window (or over all so far if fewer than window size)
             mean_orig = np.mean(self.original_ep_returns)
             mean_learned = np.mean(self.learned_ep_returns)

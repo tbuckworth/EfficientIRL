@@ -137,6 +137,7 @@ def optimize_hyperparams(bounds,
                          opt_metric="summary.original_ep_return_mean",
                          greater_is_better=True,
                          abs=False,
+                         debug=False,
                          ):
     strings = {k: v for k, v in fixed.items() if isinstance(v, list) and k != "extra_tags"}
     string_select = {k: v[np.random.choice(len(v))] for k, v in strings.items()}
@@ -160,12 +161,15 @@ def optimize_hyperparams(bounds,
     hparams.update(string_select)
 
     hparams = {k: int(v) if isinstance(v, np.int64) else v for k, v in hparams.items()}
-    try:
+    if debug:
         run_next(hparams)
-    except Exception as e:
-        print(e)
-        print(traceback.format_exc())
-        wandb.finish(exit_code=-1)
+    else:
+        try:
+            run_next(hparams)
+        except Exception as e:
+            print(e)
+            print(traceback.format_exc())
+            wandb.finish(exit_code=-1)
 
 
 def init_wandb(cfg, prefix="symbolic_graph"):
@@ -177,12 +181,12 @@ def init_wandb(cfg, prefix="symbolic_graph"):
                tags=cfg["extra_tags"], resume=wb_resume, name=f"{prefix}-{name}")
 
 
-def run_forever(bounds, fixed, run_func, opt_metric, abs=False):
+def run_forever(bounds, fixed, run_func, opt_metric, abs=False, debug=False):
     project = "EfficientIRL"
     id_tag = fixed["extra_tags"][0]
     fixed["original_start"] = time.asctime()
     while True:
-        optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs)
+        optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs, debug=debug)
 
 
 def search_eirl():
@@ -272,7 +276,7 @@ def search_meow():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean")
+    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean", debug=True)
 
 
 if __name__ == "__main__":

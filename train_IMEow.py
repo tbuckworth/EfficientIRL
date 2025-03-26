@@ -199,8 +199,9 @@ def trainIMEow(algo="imeow",
             policy = expert_trainer.policy,
             logdir=logdir,
         )
-    learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
-    learner.learn(learner_timesteps, callback=RewardLoggerCallback())
+    else:
+        learner = load_learner(env_name, wenv, logdir, None, rl_algo)
+    learner.learn(learner_timesteps, wandb=wandb, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
                f'{logdir}/model_RL_{learner_timesteps}.pth')

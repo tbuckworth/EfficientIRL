@@ -544,17 +544,20 @@ class MEOW:
             action_sizes=envs.action_space.shape[-1],
             state_sizes=envs.observation_space.shape[-1],
             device=device).to(device)
+        self.warm_start = False
         if policy is not None:
             self.policy.load_state_dict(policy.state_dict())
+            self.warm_start = True
         self.policy_target.load_state_dict(self.policy.state_dict())
 
         self.q_optimizer = optim.Adam(self.policy.parameters(), lr=q_lr)
         self.a_optimizer = None
         # Automatic entropy tuning
+        self.alpha = alpha
         if autotune:
             self.target_entropy = -torch.prod(torch.Tensor(envs.action_space.shape).to(device)).item()
             self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
-            alpha = self.log_alpha.exp().item()
+            self.alpha = self.log_alpha.exp().item()
             self.a_optimizer = optim.Adam([self.log_alpha], lr=q_lr)
 
         envs.observation_space.dtype = np.float32
@@ -573,29 +576,25 @@ class MEOW:
         self.test_envs = test_envs
         self.buffer_size = buffer_size
 
-    def learn(self, total_timesteps, learning_starts=0, wandb=None, callback=None):
-        # callback = self._init_callback(callback, progress_bar)
-        callback.on_training_start(locals(), globals())
-        # callback.on_rollout_start()
-        # callback.update_locals(locals())
-        # callback.update_locals(locals())
-        # callback.on_rollout_end()
+    def learn(self, total_timesteps, learning_starts=5000, wandb=None, callback=None):
+        callback.cust_training_start(locals(), globals(), self.envs.num_envs)
 
         rb = ReplayBuffer(
             self.buffer_size,
             self.envs.observation_space,
             self.envs.action_space,
             self.device,
+            n_envs=self.envs.num_envs,
             handle_timeout_termination=False,
         )
         start_time = time.time()
 
         best_test_rewards = -np.inf
         # TRY NOT TO MODIFY: start the game
-        obs, _ = self.envs.reset(seed=self.seed)
+        obs = self.envs.reset()
         for global_step in range(total_timesteps):
             # ALGO LOGIC: put action logic here
-            if global_step < learning_starts:
+            if global_step < learning_starts and not self.warm_start:
                 actions = np.array([self.envs.action_space.sample() for _ in range(self.envs.num_self.envs)])
             else:
                 self.policy.eval()
@@ -603,28 +602,29 @@ class MEOW:
                 actions = actions.detach().cpu().numpy()
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, rewards, terminations, truncations, infos = self.envs.step(actions)
+            next_obs, rewards, dones, infos = self.envs.step(actions)
             # maybe need to put dones here instead
-            callback.update_locals(locals(), globals())
+            callback.update_locals(locals())
             callback.custom_step(global_step)
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
-            if "final_info" in infos:
-                for info in infos["final_info"]:
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    wandb.log({
-                        "charts/global_step": global_step,
-                        "charts/episodic_return": info["episode"]["r"],
-                        "charts/episodic_length": info["episode"]["l"]
-                    })
-                    break
+            ep_stats = [info["episode"] for info in infos if "episode" in info]
+            if len(ep_stats)>0:
+                ep_rew = [info["r"] for info in ep_stats]
+                print(f"global_step={global_step}, mean_episodic_return={ep_rew:.2f}")
+                wandb.log({
+                    "charts/global_step": global_step,
+                    "charts/mean_episodic_return": np.mean(ep_rew),
+                    "charts/std_episodic_return": np.std(ep_rew),
+                    "charts/mean_episodic_length": np.mean([info["l"] for info in ep_stats])
+                })
 
             # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
-            rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+            # for idx, trunc in enumerate(truncations):
+            #     if trunc:
+            #         real_next_obs[idx] = infos["final_observation"][idx]
+            rb.add(obs, real_next_obs, actions, rewards, dones, infos)
 
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
             obs = next_obs
@@ -668,7 +668,7 @@ class MEOW:
                             self.a_optimizer.zero_grad()
                             alpha_loss.backward()
                             self.a_optimizer.step()
-                            alpha = self.log_alpha.exp().item()
+                            self.alpha = self.log_alpha.exp().item()
 
                 # update the target networks
                 if global_step % self.target_network_frequency == 0:
@@ -679,7 +679,7 @@ class MEOW:
                     logs = {
                         "losses/global_step": global_step,
                         "losses/qf_loss": qf_loss.item(),
-                        "losses/alpha": alpha,
+                        "losses/alpha": self.alpha,
                         "charts/global_step": global_step,
                         "charts/SPS": int(global_step / (time.time() - start_time)),
                     }
