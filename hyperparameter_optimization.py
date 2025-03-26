@@ -277,7 +277,7 @@ def search_meow():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean", debug=True)
+    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean", debug=False)
 
 
 if __name__ == "__main__":
