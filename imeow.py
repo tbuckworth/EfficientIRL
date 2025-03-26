@@ -150,6 +150,7 @@ class InverseMEowLossCalculator:
     enforce_rew_val_consistency: bool
     q_coef: float
     hard: bool
+    abs_log_probs: bool
 
     def __call__(
             self,
@@ -231,7 +232,10 @@ class InverseMEowLossCalculator:
 
         reward_advantage = q_hat - value_hat.squeeze()
 
-        kl_loss = -log_prob.mean()
+        if self.abs_log_probs:
+            kl_loss = log_prob.abs().mean()
+        else:
+            kl_loss = -log_prob.mean()
 
         adv_loss = (actor_advantage - reward_advantage).pow(2).mean()
         q_loss = (q_hat - q_val_hat.squeeze()).pow(2).mean()
@@ -493,7 +497,8 @@ class IMEow(algo_base.DemonstrationAlgorithm):
             sigma_max=-0.3,
             sigma_min=-5.0,
             q_coef=1.,
-            hard=False
+            hard=False,
+            abs_log_probs=False,
     ):
         """Builds IMEow.
 
@@ -621,7 +626,7 @@ class IMEow(algo_base.DemonstrationAlgorithm):
         )
         self.loss_calculator = InverseMEowLossCalculator(gamma, l2_weight, consistency_coef,
                                                          reward_type, maximize_reward, log_prob_adj_reward,
-                                                         enforce_rew_val_consistency, q_coef, hard)
+                                                         enforce_rew_val_consistency, q_coef, hard, abs_log_probs)
 
     @property
     def policy(self) -> FlowPolicy:

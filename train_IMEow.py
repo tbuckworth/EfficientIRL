@@ -107,7 +107,8 @@ def trainIMEow(algo="imeow",
                sigma_max=-0.3,
                sigma_min=-5.0,
                q_coef=1.,
-               hard=False):
+               hard=False, abs_log_probs=False
+               ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
     if expert_algo is None:
@@ -157,6 +158,7 @@ def trainIMEow(algo="imeow",
             sigma_min=sigma_min,
             q_coef=q_coef,
             hard=hard,
+            abs_log_probs=abs_log_probs
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")

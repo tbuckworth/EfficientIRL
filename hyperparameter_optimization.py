@@ -255,6 +255,7 @@ def search_meow():
         batch_size=64,
         n_envs=16,
         norm_reward=[False, True],
+        abs_log_probs=[True, False],
         rl_algo="meow",
         consistency_coef=0.,
         lr=1e-3,
@@ -262,11 +263,11 @@ def search_meow():
     )
     bounds = dict(
         q_coef=[1., 10.],
-        n_epochs=[1],#[100, 250],
+        n_epochs=[10, 250],
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
-        n_expert_demos=[1],#[1, 60],
+        n_expert_demos=[1, 60],
         learner_timesteps=[100_000, 3000_000],
         # gamma=[0.98],#[0.8, 0.999],
         # training_increments=[5, 10],
