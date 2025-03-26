@@ -552,12 +552,12 @@ class MEOW:
         self.a_optimizer = None
         # Automatic entropy tuning
         if autotune:
-            self.target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
+            self.target_entropy = -torch.prod(torch.Tensor(envs.action_space.shape).to(device)).item()
             self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
             alpha = self.log_alpha.exp().item()
             self.a_optimizer = optim.Adam([self.log_alpha], lr=q_lr)
 
-        envs.single_observation_space.dtype = np.float32
+        envs.observation_space.dtype = np.float32
 
         self.tau = tau
         self.target_network_frequency = target_network_frequency
@@ -573,11 +573,18 @@ class MEOW:
         self.test_envs = test_envs
         self.buffer_size = buffer_size
 
-    def learn(self, total_timesteps, learning_starts=0, wandb=None):
+    def learn(self, total_timesteps, learning_starts=0, wandb=None, callback=None):
+        # callback = self._init_callback(callback, progress_bar)
+        callback.on_training_start(locals(), globals())
+        # callback.on_rollout_start()
+        # callback.update_locals(locals())
+        # callback.update_locals(locals())
+        # callback.on_rollout_end()
+
         rb = ReplayBuffer(
             self.buffer_size,
-            self.envs.single_observation_space,
-            self.envs.single_action_space,
+            self.envs.observation_space,
+            self.envs.action_space,
             self.device,
             handle_timeout_termination=False,
         )
@@ -589,7 +596,7 @@ class MEOW:
         for global_step in range(total_timesteps):
             # ALGO LOGIC: put action logic here
             if global_step < learning_starts:
-                actions = np.array([self.envs.single_action_space.sample() for _ in range(self.envs.num_self.envs)])
+                actions = np.array([self.envs.action_space.sample() for _ in range(self.envs.num_self.envs)])
             else:
                 self.policy.eval()
                 actions, _ = self.policy.sample(num_samples=obs.shape[0], obs=obs, deterministic=False)
@@ -598,6 +605,8 @@ class MEOW:
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, rewards, terminations, truncations, infos = self.envs.step(actions)
             # maybe need to put dones here instead
+            callback.update_locals(locals(), globals())
+            callback.custom_step(global_step)
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if "final_info" in infos:

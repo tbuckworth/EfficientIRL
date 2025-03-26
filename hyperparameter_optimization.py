@@ -254,6 +254,7 @@ def search_meow():
         rl_algo="meow",
         consistency_coef=0.,
         lr=1e-3,
+        n_eval_episodes=1,
     )
     bounds = dict(
         q_coef=[1., 10.],
@@ -261,7 +262,7 @@ def search_meow():
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
-        n_expert_demos=[1, 60],
+        n_expert_demos=[1],#[1, 60],
         learner_timesteps=[100_000, 3000_000],
         # gamma=[0.98],#[0.8, 0.999],
         # training_increments=[5, 10],

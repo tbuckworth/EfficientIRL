@@ -79,6 +79,10 @@ class RewardLoggerCallback(BaseCallback):
         self._orig_sum = np.zeros(num_envs)
         self._learned_sum = np.zeros(num_envs)
 
+    def custom_step(self, num_timesteps):
+        self.num_timesteps = num_timesteps
+        return self._on_step()
+
     def _on_step(self) -> bool:
         # infos, rewards, and dones for each parallel env at this step
         infos = self.locals.get("infos")
