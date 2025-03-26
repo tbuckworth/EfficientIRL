@@ -28,7 +28,7 @@ def main():
     num_envs = 8
     my_gravity = 15.0
 
-    vec_env = overridden_vec_env(env_id, num_envs, {"my_gravity": my_gravity})
+    vec_env = overridden_vec_env(env_id, num_envs, {"gravity": my_gravity})
 
     agent = PPO('MlpPolicy', vec_env, verbose=1)
     agent.learn(10000)
