@@ -363,6 +363,18 @@ def load_humanoid_ppo_learner(wenv, logdir, policy):
     return learner
 
 
+def load_meow_learner(wenv, logdir, policy):
+    params = dict(
+
+    )
+
+    learner = MEOW(**params)
+    learner.policy.load_state_dict(policy.state_dict())
+    learner.target_policy.load_state_dict(policy.state_dict())
+    return learner
+
+
+
 def load_learner(env_name, wenv, logdir, policy, rl_algo="ppo"):
     if rl_algo == "ppo":
         if env_name == "seals:seals/Hopper-v1":
@@ -382,4 +394,6 @@ def load_learner(env_name, wenv, logdir, policy, rl_algo="ppo"):
     elif rl_algo == "sac":
         if env_name == "seals:seals/Ant-v1":
             return load_ant_sac_learner(wenv, logdir, policy)
+    elif rl_algo == "meow":
+        return load_meow_learner(wenv, logdir, policy)
     raise NotImplementedError
