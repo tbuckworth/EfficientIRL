@@ -420,6 +420,7 @@ def train(args=None):
         real_next_obs = next_obs.copy()
         for idx, trunc in enumerate(truncations):
             if trunc:
+                # I don't think you need to do this, because when dones is true, we don't use the next val, and have zero instead.
                 real_next_obs[idx] = infos["final_observation"][idx]
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
@@ -527,21 +528,21 @@ class MEOW:
             logdir = None,
     ):
         self.logdir = logdir
-        assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+        assert isinstance(envs.action_space, gym.spaces.Box), "only continuous action space is supported"
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.policy = FlowPolicy(
             alpha=alpha,
             sigma_max=sigma_max,
             sigma_min=sigma_min,
-            action_sizes=envs.action_space.shape[1],
-            state_sizes=envs.observation_space.shape[1],
+            action_sizes=envs.action_space.shape[-1],
+            state_sizes=envs.observation_space.shape[-1],
             device=device).to(device)
         self.policy_target = FlowPolicy(
             alpha=alpha,
             sigma_max=sigma_max,
             sigma_min=sigma_min,
-            action_sizes=envs.action_space.shape[1],
-            state_sizes=envs.observation_space.shape[1],
+            action_sizes=envs.action_space.shape[-1],
+            state_sizes=envs.observation_space.shape[-1],
             device=device).to(device)
         if policy is not None:
             self.policy.load_state_dict(policy.state_dict())
@@ -596,6 +597,7 @@ class MEOW:
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, rewards, terminations, truncations, infos = self.envs.step(actions)
+            # maybe need to put dones here instead
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if "final_info" in infos:

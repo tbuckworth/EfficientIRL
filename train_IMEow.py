@@ -14,7 +14,7 @@ import imeow
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
-    init_policy_weights
+    init_policy_weights, load_env
 from meow.meow_continuous_action import FlowPolicy, MEOW, create_envs_meow
 from modified_cartpole import overridden_vec_env
 
@@ -128,8 +128,8 @@ def trainIMEow(algo="imeow",
         policy = FlowPolicy(alpha=alpha,
                             sigma_max=sigma_max,
                             sigma_min=sigma_min,
-                            action_sizes=env.action_space.shape[1],
-                            state_sizes=env.observation_space.shape[1],
+                            action_sizes=env.action_space.shape[-1],
+                            state_sizes=env.observation_space.shape[-1],
                             device=device).to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
 
@@ -184,17 +184,21 @@ def trainIMEow(algo="imeow",
         wandb.finish()
         return
 
-    envs, test_envs = create_envs_meow(env_name, seed, n_envs)
+    # envs, test_envs = create_envs_meow(env_name, seed, n_envs)
+    _, envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
+             [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
+    _, test_envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
+    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
 
     env, wenv = override_env_and_wrap_reward(envs, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)
-    # if rl_algo == "meow":
-    #     learner = MEOW(
-    #         envs,
-    #         test_envs,
-    #         policy = expert_trainer.policy,
-    #         logdir=logdir,
-    #     )
+    if rl_algo == "meow":
+        learner = MEOW(
+            envs,
+            test_envs,
+            policy = expert_trainer.policy,
+            logdir=logdir,
+        )
     learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
