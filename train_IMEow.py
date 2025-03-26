@@ -118,7 +118,7 @@ def trainIMEow(algo="imeow",
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
-    default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
+    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs, n_eval_episodes,
                                                                                    n_expert_demos, seed, expert_algo,
                                                                                    norm_reward)
 

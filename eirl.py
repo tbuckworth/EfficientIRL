@@ -350,15 +350,17 @@ class EfficientIRLLossCalculator:
             )
             plt.scatter(
                 x=obs[:, 2].cpu().numpy(),
-                y=log_prob.detach().cpu().numpy(),
+                y=log_prob.exp().detach().cpu().numpy(),
                 label="Angle vs Pi (Cartpole)"
             )
+            plt.show()
             plt.scatter(
-                x=obs[:, 0].cpu().numpy(),
-                y=reward_hat.detach().cpu().numpy(),
+                x=obs[:, 2].cpu().numpy(),
+                y=sa_rew_hat.detach().cpu().numpy(),
                 label="Angle vs Reward Advantage (Cartpole)"
             )
             plt.show()
+            self.plot_hist_rewards(reward_hat, rews)
 
         return EIRLTrainingMetrics(
             kl_loss=loss1,
@@ -374,6 +376,21 @@ class EfficientIRLLossCalculator:
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
         )
+
+    def plot_hist_rewards(self, reward_hat, rews):
+        plt.hist(
+            reward_hat[rews > 0].detach().cpu().numpy(),
+            alpha=0.75,
+            label="Positive True Reward"
+        )
+        plt.hist(
+            reward_hat[rews <= 0].detach().cpu().numpy(),
+            alpha=0.75,
+            label="Zero/Neg True Reward"
+        )
+        plt.legend()
+        plt.title("Learned Rewards Bucketed by True Reward Category")
+        plt.show()
 
 
 def enumerate_batches(
@@ -822,7 +839,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
 
 
 def load_expert_trainer(policy, cfg, model_file, default_rng, env, expert_transitions):
-    expert_trainer = eirl.EIRL(
+    expert_trainer = EIRL(
         policy=policy,
         observation_space=env.observation_space,
         action_space=env.action_space,

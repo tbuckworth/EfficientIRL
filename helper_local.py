@@ -15,7 +15,7 @@ import torch.nn as nn
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
-from stable_baselines3 import TD3
+from stable_baselines3 import TD3, PPO
 from stable_baselines3.common import torch_layers
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -154,17 +154,25 @@ def get_config(logdir, pathname="config.npy"):
 
 def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50, seed=42, expert_algo="sac",
                             norm_reward=False):
-    default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
+    default_rng, env, expert_rollouts, target_rewards, expert = load_expert_rollouts(env_name, expert_algo, n_envs,
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
     expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
-    return default_rng, env, expert_transitions, target_rewards
+    return default_rng, env, expert_transitions, target_rewards, expert
+
+
+def load_cartpole_ppo_expert(env):
+    # Deliberately sub_optimal agent - gets around 150 reward
+    logdir = "logs/train/seals:seals/CartPole-v0/2025-03-26__07-55-45__seed_42"
+    return load_agent(env, PPO, logdir)
 
 
 def load_expert_rollouts(env_name, expert_algo, n_envs, n_eval_episodes, n_expert_demos, norm_reward, seed):
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=norm_reward)
     if expert_algo == "td3" and env_name == "seals:seals/Hopper-v1":
         expert = load_hopper_td3_expert(env)
+    elif expert_algo == "ppo" and env_name == "seals:seals/CartPole-v0":
+        expert = load_cartpole_ppo_expert(env)
     else:
         expert = load_policy(
             f"{expert_algo}-huggingface",
@@ -172,10 +180,7 @@ def load_expert_rollouts(env_name, expert_algo, n_envs, n_eval_episodes, n_exper
             env_name=env_name,
             venv=env,
         )
-    expert_rewards, _ = evaluate_policy(
-        expert, env, n_eval_episodes, return_episode_rewards=True
-    )
-    target_rewards = np.mean(expert_rewards)
+    target_rewards = get_target_rewards(env, expert, n_eval_episodes)
     print(f"Target:{target_rewards}")
     expert_rollouts = rollout.rollout(
         expert,
@@ -184,7 +189,15 @@ def load_expert_rollouts(env_name, expert_algo, n_envs, n_eval_episodes, n_exper
         rng=default_rng,
         exclude_infos=False,
     )
-    return default_rng, env, expert_rollouts, target_rewards
+    return default_rng, env, expert_rollouts, target_rewards, expert
+
+
+def get_target_rewards(env, expert, n_eval_episodes):
+    expert_rewards, _ = evaluate_policy(
+        expert, env, n_eval_episodes, return_episode_rewards=True
+    )
+    target_rewards = np.mean(expert_rewards)
+    return target_rewards
 
 
 def load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=False, pre_wrappers=None):
@@ -290,12 +303,12 @@ def init_policy_weights(m):
         nn.init.constant_(m.bias.data, 0.0)
 
 
-def load_td3_agent(env, logdir):
+def load_agent(env, agent, logdir):
     model_file = get_latest_model(logdir, "RL")
-    learner = TD3('MlpPolicy', env)
+    learner = agent('MlpPolicy', env)
     policy = learner.policy
     policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
     return policy
 
 def load_hopper_td3_expert(env):
-    return load_td3_agent(env, "logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")
+    return load_agent(env, TD3, "logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")

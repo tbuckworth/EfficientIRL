@@ -13,7 +13,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
-    init_policy_weights
+    init_policy_weights, get_target_rewards
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -113,7 +113,7 @@ def trainEIRL(algo="eirl",
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
-    default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs, n_eval_episodes,
+    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs, n_eval_episodes,
                                                                                    n_expert_demos, seed, expert_algo,
                                                                                    norm_reward)
 
@@ -181,6 +181,9 @@ def trainEIRL(algo="eirl",
         return
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)
+    if overrides is not None:
+        target_rewards = get_target_rewards(env, expert, n_eval_episodes)
+        print(f"Expert Target Rewards in Overridden Environment:{target_rewards:.2f}")
     learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
     if reset_weights:
         learner.policy.apply(init_policy_weights)
@@ -227,7 +230,7 @@ def evaluate(env, expert_trainer, target_rewards, phase, log=False, callback=Non
 
 
 env_expert_algos = {
-    "seals:seals/Cartpole-v0": "ppo",
+    "seals:seals/CartPole-v0": "ppo",
     "seals:seals/Hopper-v1": "sac",
     "seals:seals/Ant-v1": "ppo",
     "seals:seals/MountainCar-v0": "ppo",
@@ -238,7 +241,7 @@ env_expert_algos = {
 
 if __name__ == "__main__":
     # logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0"
-    model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
+    # model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
     for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
         trainEIRL(
             algo="eirl",
@@ -247,9 +250,9 @@ if __name__ == "__main__":
             n_expert_demos=10,
             rl_algo="ppo",
             model_file=None,
-            n_epochs=150,
+            n_epochs=10,
             reward_type="next state",
             extra_tags=["low_cons_coef"],
             learner_timesteps=3000_000,
-            env_name="seals:seals/Hopper-v1",
+            env_name="seals:seals/CartPole-v0",
         )

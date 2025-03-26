@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from imitation.util import logger as imit_logger
 from stable_baselines3 import TD3, PPO, SAC
-from helper_local import import_wandb, create_logdir, load_env, get_config, load_td3_agent
+from helper_local import import_wandb, create_logdir, load_env, get_config, load_agent
 from gymnasium.wrappers import RecordVideo
 import gymnasium as gym
 
@@ -17,13 +17,14 @@ agents = {
 
 def trainRL(
             seed=42,
-            learner_timesteps=500_000,
+            learner_timesteps=150_000,
             n_envs=16,
             extra_tags=None,
             env_name="seals:seals/CartPole-v0",
             ):
     algo = "PPO"
     tags = [] + (extra_tags if extra_tags is not None else [])
+    logdir = create_logdir(env_name, seed)
     cfg = locals()
     rl_kwargs = dict(
         learning_rate=0.0003,
@@ -36,7 +37,6 @@ def trainRL(
 
     AGENT = agents[algo]
 
-    logdir = create_logdir(env_name, seed)
     np.save(os.path.join(logdir, "config.npy"), cfg)
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=cfg, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
@@ -62,7 +62,7 @@ def record_video(logdir):
     seed = cfg["seed"]
     default_rng, env = load_env(env_name, n_envs, seed, norm_reward=False)
 
-    policy = load_td3_agent(env, logdir)
+    policy = load_agent(env, logdir)
 
     vid_env = gym.make(env_name, render_mode="rgb_array")
     # Set up video recording parameters

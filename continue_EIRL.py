@@ -40,7 +40,7 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
         "learner_timesteps": learner_timesteps,
     })
     # net_arch = [32, 32]
-    default_rng, env, expert_transitions, target_rewards = load_expert_transitions(env_name, n_envs,
+    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs,
                                                                                    n_eval_episodes,
                                                                                    n_expert_demos, seed,
                                                                                    expert_algo,

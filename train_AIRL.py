@@ -9,7 +9,7 @@ from imitation.util import logger as imit_logger
 from stable_baselines3 import PPO
 from stable_baselines3.common.utils import get_schedule_fn
 
-from helper_local import load_expert_transitions, load_expert_rollouts, create_logdir, import_wandb
+from helper_local import load_expert_rollouts, create_logdir, import_wandb
 import json
 
 from train_EIRL import evaluate
@@ -48,7 +48,7 @@ def train_AIRL(
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=wandb_config, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
-    default_rng, env, expert_rollouts, target_rewards = load_expert_rollouts(env_name, expert_algo, n_envs,
+    default_rng, env, expert_rollouts, target_rewards, expert = load_expert_rollouts(env_name, expert_algo, n_envs,
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
 
