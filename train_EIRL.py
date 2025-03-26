@@ -102,6 +102,7 @@ def trainEIRL(algo="eirl",
               rl_algo="ppo",
               reset_weights=False,
               rew_const=False,
+              disc_coef=0.,
               ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
@@ -141,6 +142,7 @@ def trainEIRL(algo="eirl",
             log_prob_adj_reward=log_prob_adj_reward,
             enforce_rew_val_consistency=enforce_rew_val_consistency,
             rew_const=rew_const,
+            disc_coef=disc_coef,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(

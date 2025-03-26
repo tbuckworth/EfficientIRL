@@ -39,7 +39,7 @@ from stable_baselines3.common.distributions import CategoricalDistribution, Diag
 from stable_baselines3.common.policies import BasePolicy
 from torch import Tensor
 
-from helper_local import transitions_with_rew_collate_fn
+from helper_local import transitions_with_rew_collate_fn, filter_params
 
 
 @dataclasses.dataclass(frozen=True)
@@ -165,6 +165,7 @@ class EfficientIRLLossCalculator:
     maximize_reward: bool
     log_prob_adj_reward: bool
     enforce_rew_val_consistency: bool
+    disc_coef: bool
 
     def __call__(
             self,
@@ -240,8 +241,8 @@ class EfficientIRLLossCalculator:
 
         if self.log_prob_adj_reward:
             lp_rew = lp_adj_reward(obs, one_hot_acts, None, None)
-            target = reward_hat.detach() -log_prob.detach()
-            lp_loss = (lp_rew-target).pow(2).mean()
+            target = reward_hat.detach() - log_prob.detach()
+            lp_loss = (lp_rew - target).pow(2).mean()
         else:
             lp_loss = 0
 
@@ -256,6 +257,9 @@ class EfficientIRLLossCalculator:
         q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
 
         reward_advantage = q_hat - value_hat.squeeze()
+
+        d = reward_advantage.exp() / (reward_advantage.exp() + log_prob.exp())
+        disc_loss = (d - 0.5).pow(2).mean()
 
         loss1 = -log_prob.mean()
 
@@ -282,7 +286,8 @@ class EfficientIRLLossCalculator:
         # loss = neglogp + ent_loss + l2_loss
         # should we add l2 to the loss?
 
-        loss = loss1 + (loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss + rew_adv_loss
+        loss = loss1 + (
+                loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss + rew_adv_loss + disc_loss * self.disc_coef
 
         reward_correl = None
         if rews is not None:
@@ -309,25 +314,7 @@ class EfficientIRLLossCalculator:
                 y=r_hat,
                 label="Predicted Rewards"
             )
-            ns_r_hat = norm(ns_rew_hat[~dones]).detach().cpu().numpy()
-            plt.scatter(
-                x=norm(rews[~dones]).cpu().numpy(),
-                y=ns_r_hat,
-                label="Next State Rewards"
-            )
-            sa_r_hat = norm(sa_rew_hat).detach().cpu().numpy()
-            plt.scatter(
-                x=norm_rew,
-                y=sa_r_hat,
-                label="State-Action Rewards"
-            )
             plt.legend()
-            plt.show()
-
-            plt.scatter(
-                x=sa_r_hat[~dones.cpu().numpy()],
-                y=ns_r_hat[~dones.cpu().numpy()],
-            )
             plt.show()
 
             plt.scatter(
@@ -338,28 +325,19 @@ class EfficientIRLLossCalculator:
 
             flt = acts == 0
             plt.scatter(
-                x=obs[flt,2].cpu().numpy(),
-                y=reward_hat[flt].detach().cpu().numpy(),
+                x=obs[:, 2].cpu().numpy(),
+                y=(reward_advantage + entropy).detach().cpu().numpy(),
                 label="Angle vs Rewards (Cartpole)"
             )
             plt.show()
             plt.scatter(
-                x=obs[:, 0].cpu().numpy(),
+                x=obs[:, 2].cpu().numpy(),
                 y=value_hat.detach().cpu().numpy(),
                 label="Angle vs Value (Cartpole)"
             )
-            plt.scatter(
-                x=obs[:, 2].cpu().numpy(),
-                y=log_prob.exp().detach().cpu().numpy(),
-                label="Angle vs Pi (Cartpole)"
-            )
             plt.show()
-            plt.scatter(
-                x=obs[:, 2].cpu().numpy(),
-                y=sa_rew_hat.detach().cpu().numpy(),
-                label="Angle vs Reward Advantage (Cartpole)"
-            )
-            plt.show()
+            self.plot_rewards_vs_obs(2, "Angle", obs, reward_hat, rews)
+            self.plot_rewards_vs_obs(0, "Position", obs, reward_hat, rews)
             self.plot_hist_rewards(reward_hat, rews)
 
         return EIRLTrainingMetrics(
@@ -376,6 +354,23 @@ class EfficientIRLLossCalculator:
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
         )
+
+    def plot_rewards_vs_obs(self, i, i_name, obs, reward_hat, rews):
+        plt.scatter(
+            x=obs[:, i].cpu().numpy(),
+            y=rews.detach().cpu().numpy(),
+            label="True Reward",
+            alpha=0.5
+        )
+        plt.scatter(
+            x=obs[:, i].cpu().numpy(),
+            y=reward_hat.detach().cpu().numpy(),
+            label="Learned Reward",
+            alpha=0.5
+        )
+        plt.legend()
+        plt.title(f"{i_name} vs Rewards (Cartpole)")
+        plt.show()
 
     def plot_hist_rewards(self, reward_hat, rews):
         plt.hist(
@@ -534,6 +529,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             log_prob_adj_reward=False,
             enforce_rew_val_consistency=False,
             rew_const=False,
+            disc_coef=0.,
     ):
         """Builds EIRL.
 
@@ -670,7 +666,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
         )
         self.loss_calculator = EfficientIRLLossCalculator(gamma, ent_weight, l2_weight, consistency_coef, hard,
                                                           reward_type, maximize_reward, log_prob_adj_reward,
-                                                          enforce_rew_val_consistency)
+                                                          enforce_rew_val_consistency, disc_coef)
 
     @property
     def policy(self) -> policies.ActorCriticPolicy:
@@ -839,22 +835,16 @@ class EIRL(algo_base.DemonstrationAlgorithm):
 
 
 def load_expert_trainer(policy, cfg, model_file, default_rng, env, expert_transitions):
+    filtered_params = filter_params(cfg, EIRL)
     expert_trainer = EIRL(
         policy=policy,
         observation_space=env.observation_space,
         action_space=env.action_space,
         demonstrations=expert_transitions,
         rng=default_rng,
-        consistency_coef=cfg["consistency_coef"],
-        hard=cfg["hard"],
-        gamma=cfg["gamma"],
-        batch_size=cfg["batch_size"],
-        l2_weight=cfg["l2_weight"],
         optimizer_cls=torch.optim.Adam,
         optimizer_kwargs={"lr": cfg["lr"]},
-        reward_type=cfg["reward_type"],
-        maximize_reward=cfg["maximize_reward"],
-        log_prob_adj_reward=cfg["log_prob_adj_reward"],
+        **filtered_params,
     )
     expert_trainer.reward_func.load_state_dict(
         torch.load(model_file, map_location=policy.device

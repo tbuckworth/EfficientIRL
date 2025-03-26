@@ -102,7 +102,8 @@ class TestHopperLearner(unittest.TestCase):
         logdir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
         logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__05-14-17__seed_100"
         logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0"
-        model_file = get_latest_model(logdir, "RL")
+        logdir = "logs/train/seals:seals/CartPole-v0/2025-03-26__13-53-30__seed_42"
+        model_file = get_latest_model(logdir, "SUP")
         cfg = get_config(model_file)
         env_name = cfg["env_name"]
         n_envs = cfg["n_envs"]
@@ -179,11 +180,11 @@ class TestHopperLearner(unittest.TestCase):
         self.learner.learn(1000_000)
 
     def test_trainer(self):
-        default_rng, env, expert_transitions, target_rewards = load_expert_transitions(
+        default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(
             self.cfg["env_name"],
             self.cfg["n_envs"],
-            self.cfg["n_eval_episodes"],
-            10,#self.cfg["n_expert_demos"],
+            1,#self.cfg["n_eval_episodes"],
+            1,#self.cfg["n_expert_demos"],
             self.cfg["seed"],
             self.cfg["expert_algo"],
         )
