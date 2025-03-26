@@ -131,8 +131,9 @@ def evaluate_actions(policy, obs, actions) -> tuple[Any, Any, Any]:
     """
     log_prob = policy.log_prob(obs, actions)
     q_vals, values = policy.get_qv(obs, actions)
+
     # Technically, these should be the same:
-    #torch.corrcoef(torch.cat((adv, log_prob.unsqueeze(-1)), dim=-1).T)
+    # torch.corrcoef(torch.cat((adv, log_prob.unsqueeze(-1)), dim=-1).T)
     return q_vals, values, log_prob
 
 
@@ -148,6 +149,7 @@ class InverseMEowLossCalculator:
     log_prob_adj_reward: bool
     enforce_rew_val_consistency: bool
     q_coef: float
+    hard: bool
 
     def __call__(
             self,
@@ -191,6 +193,9 @@ class InverseMEowLossCalculator:
 
         q_val_hat, value_hat, log_prob = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
+        if self.hard:
+            entropy = policy.entropy(obs, num_samples=50)
+            actor_advantage = log_prob + entropy
 
         if self.reward_type == "next state":
             # We primarily use a next state reward, but train a state action reward to both imitate it and replace it in
@@ -488,6 +493,7 @@ class IMEow(algo_base.DemonstrationAlgorithm):
             sigma_max=-0.3,
             sigma_min=-5.0,
             q_coef=1.,
+            hard=False
     ):
         """Builds IMEow.
 
@@ -615,7 +621,7 @@ class IMEow(algo_base.DemonstrationAlgorithm):
         )
         self.loss_calculator = InverseMEowLossCalculator(gamma, l2_weight, consistency_coef,
                                                          reward_type, maximize_reward, log_prob_adj_reward,
-                                                         enforce_rew_val_consistency, q_coef)
+                                                         enforce_rew_val_consistency, q_coef, hard)
 
     @property
     def policy(self) -> FlowPolicy:
@@ -781,5 +787,3 @@ class IMEow(algo_base.DemonstrationAlgorithm):
             # if there remains an incomplete batch
             batch_num += 1
             process_batch()
-
-

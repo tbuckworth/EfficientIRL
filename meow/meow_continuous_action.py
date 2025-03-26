@@ -237,6 +237,75 @@ class FlowPolicy(nn.Module):
         v = v * self.alpha
         return v[:, None]
 
+    def entropy(self, obs, num_samples=10):
+        if isinstance(obs, np.ndarray):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        if obs.ndim == 1:
+            obs = obs.unsqueeze(0)  # shape: (1, state_dim)
+
+        # Sample multiple actions from the policy.
+        # The sample function returns actions and their log probabilities.
+        actions = []
+        for _ in range(num_samples):
+            acts, _ = self.sample(num_samples=obs.shape[0], obs=obs, deterministic=False)
+            actions.append(acts)
+
+        # Ensure the state is repeated to match the number of sampled actions.
+        obs_rep = obs.repeat(num_samples, 1)
+        # state_rep = state.repeat(actions.shape[0], 1)
+
+        # Compute Q-values for the (state, action) pairs.
+        Q, _ = self.get_qv(obs=obs_rep, act=torch.cat(actions, 0))
+        Q_mean = Q.reshape((num_samples, obs.shape[0], -1)).mean(dim=0)
+
+        # Get the soft value V(s); get_v() returns a tensor of shape (batch_size, 1)
+        V = self.get_v(obs)
+
+        # The entropy of the policy is given by (V(s) - E[Q(s,a)])/alpha.
+        entropy = (V - Q_mean) / self.alpha
+        return entropy
+
+
+def compute_policy_entropy(policy, obs, num_samples=20):
+    """
+    Computes the entropy of the MEow policy for a given state.
+
+    Args:
+        policy (FlowPolicy): the policy instance.
+        obs (np.ndarray or torch.Tensor): state vector (or batch of states).
+        num_samples (int): number of action samples to draw.
+
+    Returns:
+        float: entropy estimate.
+    """
+    # Convert state to a tensor with batch dimension if necessary.
+    if isinstance(obs, np.ndarray):
+        obs = torch.tensor(obs, dtype=torch.float32, device=policy.device)
+    if obs.ndim == 1:
+        obs = obs.unsqueeze(0)  # shape: (1, state_dim)
+
+    # Sample multiple actions from the policy.
+    # The sample function returns actions and their log probabilities.
+    actions = []
+    for _ in range(num_samples):
+        acts, _ = policy.sample(num_samples=obs.shape[0], obs=obs, deterministic=False)
+        actions.append(acts)
+
+    # Ensure the state is repeated to match the number of sampled actions.
+    obs_rep = obs.repeat(num_samples, 1)
+    # state_rep = state.repeat(actions.shape[0], 1)
+
+    # Compute Q-values for the (state, action) pairs.
+    Q, _ = policy.get_qv(obs=obs_rep, act=torch.cat(actions, 0))
+    Q_mean = Q.reshape((num_samples, obs.shape[0], -1)).mean(dim=0)
+
+    # Get the soft value V(s); get_v() returns a tensor of shape (batch_size, 1)
+    V = policy.get_v(obs)
+
+    # The entropy of the policy is given by (V(s) - E[Q(s,a)])/alpha.
+    entropy = (V - Q_mean) / policy.alpha
+    return entropy
+
 
 def train(args=None):
     import stable_baselines3 as sb3

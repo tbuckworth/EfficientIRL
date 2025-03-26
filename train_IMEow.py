@@ -107,7 +107,7 @@ def trainIMEow(algo="imeow",
                sigma_max=-0.3,
                sigma_min=-5.0,
                q_coef=1.,
-               ):
+               hard=False):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
     if expert_algo is None:
@@ -156,6 +156,7 @@ def trainIMEow(algo="imeow",
             sigma_max=sigma_max,
             sigma_min=sigma_min,
             q_coef=q_coef,
+            hard=hard,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")
@@ -257,7 +258,7 @@ if __name__ == "__main__":
             consistency_coef=0.,
             q_coef=1.,
             n_expert_demos=10,
-            rl_algo="ppo",
+            rl_algo="meow",
             model_file=None,
             n_epochs=150,
             reward_type="next state",
