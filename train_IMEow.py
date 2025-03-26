@@ -194,8 +194,8 @@ def trainIMEow(algo="imeow",
                                              override_env_name, overrides)
     if rl_algo == "meow":
         learner = MEOW(
-            envs,
-            test_envs,
+            wenv,
+            test_envs,#these not overridden!
             policy = expert_trainer.policy,
             logdir=logdir,
         )

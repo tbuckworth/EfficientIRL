@@ -611,7 +611,7 @@ class MEOW:
             ep_stats = [info["episode"] for info in infos if "episode" in info]
             if len(ep_stats)>0:
                 ep_rew = [info["r"] for info in ep_stats]
-                print(f"global_step={global_step}, mean_episodic_return={ep_rew:.2f}")
+                print(f"global_step={global_step}, mean_episodic_return={np.mean(ep_rew):.2f}")
                 wandb.log({
                     "charts/global_step": global_step,
                     "charts/mean_episodic_return": np.mean(ep_rew),
