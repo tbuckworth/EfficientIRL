@@ -204,14 +204,14 @@ def search_eirl():
         batch_size=256,
         n_envs=8,
         norm_reward=[False, True],
-        net_arch=[[32, 32]],#[256, 256, 256, 256]]
+        net_arch=[[256, 256, 256, 256]]
         # [512, 512, 512, 512],
         # [128, 128, 128, 128],
         # [64, 128, 256, 64]],
     )
     bounds = dict(
         consistency_coef=[0.1, 1000.],
-        n_epochs=[5, 10],
+        n_epochs=[5, 20],
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
