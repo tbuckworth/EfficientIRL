@@ -6,6 +6,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.sac.policies import SACPolicy
 
 from helper_local import filter_params
+from meow.meow_continuous_action import MEOW
 
 
 def load_ant_ppo_learner(env, logdir, policy):
@@ -311,7 +312,6 @@ def load_mountaincar_ppo_learner(wenv, logdir, policy):
     return learner
 
 
-
 def load_swimmer_ppo_learner(wenv, logdir, policy):
     im_params = OrderedDict([
         ('batch_size', 8),
@@ -365,14 +365,13 @@ def load_humanoid_ppo_learner(wenv, logdir, policy):
 
 def load_meow_learner(wenv, logdir, policy):
     params = dict(
-
+        envs=wenv,
+        test_envs=wenv, # TODO: maybe this will cause problems?
+        policy=policy,
+        logdir=logdir,
     )
-
     learner = MEOW(**params)
-    learner.policy.load_state_dict(policy.state_dict())
-    learner.target_policy.load_state_dict(policy.state_dict())
     return learner
-
 
 
 def load_learner(env_name, wenv, logdir, policy, rl_algo="ppo"):

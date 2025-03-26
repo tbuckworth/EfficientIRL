@@ -15,7 +15,7 @@ from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
     init_policy_weights
-from meow.meow_continuous_action import FlowPolicy
+from meow.meow_continuous_action import FlowPolicy, MEOW
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -182,9 +182,21 @@ def trainIMEow(algo="imeow",
     if learner_timesteps == 0:
         wandb.finish()
         return
+
+    # envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    # test_envs = gym.make_vec(args.env_id, num_envs=10)
+    # test_envs = gym.wrappers.RescaleAction(test_envs, min_action=-1.0, max_action=1.0)
+
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)
-    learner = load_learner(env_name, wenv, logdir, None, rl_algo)
+    # if rl_algo == "meow":
+    #     learner = MEOW(
+    #         envs,
+    #         test_envs,
+    #         policy = expert_trainer.policy,
+    #         logdir=logdir,
+    #     )
+    learner = load_learner(env_name, wenv, logdir, expert_trainer.policy, rl_algo)
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
