@@ -119,6 +119,10 @@ def run_next_hyperparameters(hparams):
     filtered_params = filter_params(hparams, trainEIRL)
     trainEIRL(**filtered_params)
 
+def run_next_hyperparameters_imeow(hparams):
+    from train_IMEow import trainIMEow
+    filtered_params = filter_params(hparams, trainIMEow)
+    trainIMEow(**filtered_params)
 
 def get_project(env_name, exp_name):
     # TODO: make this real
@@ -227,6 +231,48 @@ def search_eirl():
     )
     run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean")
 
+def search_meow():
+    fixed = dict(
+        algo="imeow",
+        seed=[0, 42, 100, 532, 3432],
+        hard=[False, True],
+        reward_type=["next state", "state", "state-action"],
+        log_prob_adj_reward=False,
+        neg_reward=False,
+        maximize_reward=False,
+        rew_const=False,#[True, False],
+        training_increments=5,
+        # n_expert_demos=10,
+        extra_tags=["hp4", "meow"],
+        early_learning=False,
+        env_name="seals:seals/Hopper-v1",
+        enforce_rew_val_consistency=False,
+        gamma=0.995,
+        batch_size=64,
+        n_envs=16,
+        norm_reward=[False, True],
+        rl_algo="meow",
+        consistency_coef=0.,
+        lr=1e-3,
+    )
+    bounds = dict(
+        q_coef=[1., 10.],
+        n_epochs=[1],#[100, 250],
+        # log_prob_adj_reward=False,
+        # neg_reward=False,
+        # maximize_reward=False,
+        n_expert_demos=[1, 60],
+        learner_timesteps=[100_000, 3000_000],
+        # gamma=[0.98],#[0.8, 0.999],
+        # training_increments=[5, 10],
+        # lr=[0.00025, 0.0012],
+        # l2_weight=[0, 0.002],
+        # batch_size=[48, 96],
+        # n_envs=[16, 48],
+        # enforce_rew_val_consistency=False,
+    )
+    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean")
+
 
 if __name__ == "__main__":
-    search_eirl()
+    search_meow()

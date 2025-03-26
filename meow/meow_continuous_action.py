@@ -353,9 +353,8 @@ def train(args=None):
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # Setup the training and testing environment
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
-    test_envs = gym.make_vec(args.env_id, num_envs=10)
-    test_envs = gym.wrappers.RescaleAction(test_envs, min_action=-1.0, max_action=1.0)
+    n_envs = 10
+    envs, test_envs = create_envs_meow(args.env_id, args.seed, n_envs, run_name, args.capture_video)
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
@@ -492,6 +491,16 @@ def train(args=None):
 
     envs.close()
     writer.close()
+
+
+def create_envs_meow(env_id, seed, n_envs, run_name=None, capture_video=False):
+    # TODO: train in more envs???
+    if capture_video and run_name is None:
+        raise Exception(f"run_name must be provided if capturing video")
+    envs = gym.vector.SyncVectorEnv([make_env(env_id, seed, 0, capture_video, run_name)])
+    test_envs = gym.make_vec(env_id, num_envs=n_envs)
+    test_envs = gym.wrappers.RescaleAction(test_envs, min_action=-1.0, max_action=1.0)
+    return envs, test_envs
 
 
 class MEOW:

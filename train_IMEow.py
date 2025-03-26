@@ -15,7 +15,7 @@ from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
     init_policy_weights
-from meow.meow_continuous_action import FlowPolicy, MEOW
+from meow.meow_continuous_action import FlowPolicy, MEOW, create_envs_meow
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
@@ -184,11 +184,9 @@ def trainIMEow(algo="imeow",
         wandb.finish()
         return
 
-    # envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
-    # test_envs = gym.make_vec(args.env_id, num_envs=10)
-    # test_envs = gym.wrappers.RescaleAction(test_envs, min_action=-1.0, max_action=1.0)
+    envs, test_envs = create_envs_meow(env_name, seed, n_envs)
 
-    env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
+    env, wenv = override_env_and_wrap_reward(envs, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)
     # if rl_algo == "meow":
     #     learner = MEOW(
