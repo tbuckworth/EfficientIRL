@@ -22,7 +22,7 @@ from modified_cartpole import overridden_vec_env
 wandb = import_wandb()
 
 import eirl
-from ant_v1_learner_config import load_learner
+from learner_configs import load_learner
 
 
 def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):

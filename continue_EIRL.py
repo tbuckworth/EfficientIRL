@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 
-from ant_v1_learner_config import load_learner
+from learner_configs import load_learner
 from callbacks import RewardLoggerCallback
 from helper_local import get_config, load_env, get_policy_for, load_expert_transitions, import_wandb, create_logdir, \
     get_latest_model

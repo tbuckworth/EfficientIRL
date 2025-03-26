@@ -10,7 +10,7 @@ from imitation.util.util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 
 import eirl
-from ant_v1_learner_config import load_ant_ppo_learner, load_ant_sac_learner, load_learner
+from learner_configs import load_ant_ppo_learner, load_ant_sac_learner, load_learner
 from callbacks import RewardLoggerCallback
 from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir, \
     get_latest_model
