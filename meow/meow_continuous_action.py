@@ -525,8 +525,10 @@ class MEOW:
             policy_frequency=2,
             grad_clip=30,
             buffer_size=int(1e6),
-            logdir = None,
+            logdir=None,
+            evaluate=None,
     ):
+        self.evaluate = evaluate
         self.logdir = logdir
         assert isinstance(envs.action_space, gym.spaces.Box), "only continuous action space is supported"
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -609,7 +611,7 @@ class MEOW:
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             ep_stats = [info["episode"] for info in infos if "episode" in info]
-            if len(ep_stats)>0:
+            if len(ep_stats) > 0:
                 ep_rew = [info["r"] for info in ep_stats]
                 print(f"global_step={global_step}, mean_episodic_return={np.mean(ep_rew):.2f}")
                 wandb.log({
@@ -691,12 +693,7 @@ class MEOW:
                     wandb.log(logs)
 
                 if global_step % 10000 == 0:
-                    test_rewards = evaluate(self.test_envs, self.policy, deterministic=self.deterministic_action,
-                                            device=self.device)
-                    wandb.log({
-                        "Test/global_step": global_step,
-                        "Test/episodic_return": test_rewards,
-                    })
+                    test_rewards, per_expert, std_err = self.evaluate(self.test_envs, self)
                     if test_rewards > best_test_rewards:
                         best_test_rewards = test_rewards
                         torch.save(self.policy, os.path.join(f"{self.logdir}", 'test_rewards.pt'))

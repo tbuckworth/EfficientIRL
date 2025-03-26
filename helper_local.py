@@ -312,3 +312,17 @@ def load_agent(env, agent, logdir):
 
 def load_hopper_td3_expert(env):
     return load_agent(env, TD3, "logs/train/seals:seals/Hopper-v1/2025-03-21__17-06-20__seed_42")
+
+
+def load_reward_models(cfg, expert_trainer, model_file, policy):
+    expert_trainer.reward_func.load_state_dict(
+        torch.load(model_file, map_location=policy.device
+                   )["reward_func"])
+    if cfg["reward_type"] == "next state":
+        expert_trainer.state_reward_func.load_state_dict(
+            torch.load(model_file, map_location=policy.device
+                       )["state_reward_func"])
+    if cfg["log_prob_adj_reward"]:
+        expert_trainer.lp_adj_reward.load_state_dict(
+            torch.load(model_file, map_location=policy.device
+                       )["lp_adj_reward"])

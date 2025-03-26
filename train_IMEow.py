@@ -10,11 +10,12 @@ from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
+import helper_local
 import imeow
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
-    init_policy_weights, load_env
+    init_policy_weights, load_env, get_config, load_reward_models
 from meow.meow_continuous_action import FlowPolicy, MEOW, create_envs_meow
 from modified_cartpole import overridden_vec_env
 
@@ -119,24 +120,27 @@ def trainIMEow(algo="imeow",
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
-    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs, n_eval_episodes,
-                                                                                   n_expert_demos, seed, expert_algo,
-                                                                                   norm_reward)
-
+    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs,
+                                                                                           n_eval_episodes,
+                                                                                           n_expert_demos, seed,
+                                                                                           expert_algo,
+                                                                                           norm_reward)
+    policy = None
+    cfg = {}
     if model_file is not None:
-        #TODO: load alpha, sigma from config.
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        policy = FlowPolicy(alpha=alpha,
-                            sigma_max=sigma_max,
-                            sigma_min=sigma_min,
+        cfg = get_config(model_file)
+        policy = FlowPolicy(alpha=cfg["alpha"],
+                            sigma_max=cfg["sigma_max"],
+                            sigma_min=cfg["sigma_min"],
                             action_sizes=env.action_space.shape[-1],
                             state_sizes=env.observation_space.shape[-1],
                             device=device).to(device)
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
 
-
     if algo == "imeow":
         expert_trainer = imeow.IMEow(
+            policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
             demonstrations=expert_transitions,
@@ -163,8 +167,8 @@ def trainIMEow(algo="imeow",
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")
     if model_file is not None:
-        #TODO: load up reward networks too!
-        raise NotImplementedError
+        load_reward_models(cfg, expert_trainer, model_file, policy)
+
     epoch = None
     for i, increment in enumerate([training_increments for i in range(n_epochs // training_increments)]):
         expert_trainer.train(n_epochs=increment, progress_bar=False)
@@ -188,7 +192,7 @@ def trainIMEow(algo="imeow",
 
     # envs, test_envs = create_envs_meow(env_name, seed, n_envs)
     _, envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
-             [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
+    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
     _, test_envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
     [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
 
@@ -197,9 +201,10 @@ def trainIMEow(algo="imeow",
     if rl_algo == "meow":
         learner = MEOW(
             wenv,
-            test_envs,#these not overridden!
-            policy = expert_trainer.policy,
+            test_envs,  # these not overridden!
+            policy=expert_trainer.policy,
             logdir=logdir,
+            evaluate=lambda e, l: evaluate(e, l, target_rewards, phase="reinforcement", log=True),
         )
     else:
         learner = load_learner(env_name, wenv, logdir, None, rl_algo)
@@ -256,6 +261,7 @@ env_expert_algos = {
 
 if __name__ == "__main__":
     # logdir = "logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0"
+    model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-26__12-55-29__seed_0", "SUP")
     for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
         trainIMEow(
             algo="imeow",
