@@ -74,5 +74,6 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
 if __name__ == "__main__":
     # model_dir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
     model_dir = "logs/train/seals:seals/CartPole-v0/2025-03-27__11-43-05__seed_532"
+    model_dir = "logs/train/seals:seals/CartPole-v0/2025-03-27__11-12-43__seed_0"
     tags = ["Continue learning"]
     main(model_dir, run_from="SUP", tags=tags, learner_timesteps=1000_000)
