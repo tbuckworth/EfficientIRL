@@ -336,3 +336,9 @@ def load_reward_models(cfg, expert_trainer, model_file, policy):
         expert_trainer.lp_adj_reward.load_state_dict(
             torch.load(model_file, map_location=policy.device
                        )["lp_adj_reward"])
+    try:
+        expert_trainer.reward_const.load_state_dict(
+            torch.load(model_file, map_location=policy.device
+                       )["reward_const"])
+    except Exception as e:
+        pass

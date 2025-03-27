@@ -178,7 +178,10 @@ def trainEIRL(algo="eirl",
             obj["state_reward_func"] = expert_trainer.state_reward_func.state_dict()
         if log_prob_adj_reward:
             obj["lp_adj_reward"] = expert_trainer.lp_adj_reward.state_dict()
-
+        try:
+            obj["reward_const"] = expert_trainer.reward_const.state_dict()
+        except Exception as e:
+            pass
         torch.save(obj, f'{logdir}/model_SUP_{epoch}.pth')
     if learner_timesteps == 0:
         wandb.finish()

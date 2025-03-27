@@ -32,7 +32,8 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     neg_reward = cfg["neg_reward"]
     override_env_name = cfg["override_env_name"]
     overrides = cfg["overrides"]
-    rew_const_adj = cfg["rew_const_adj"]
+    override_env_name = None
+    overrides = None
 
     cfg.update({
         "model_dir": model_dir,
