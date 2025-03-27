@@ -104,6 +104,7 @@ class IMEowTrainingMetrics:
     reward_correl: th.Tensor
     weighted_reward: Optional[th.Tensor]
     rew_adv_loss: Optional[th.Tensor]
+    reward_advantage_correl: Optional[th.Tensor]
 
 
 def get_latents(policy, obs):
@@ -197,7 +198,7 @@ class InverseMEowLossCalculator:
         q_val_hat, value_hat, log_prob = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
         if self.calc_log_probs:
-            log_prob = q_val_hat - value_hat
+            log_prob = (q_val_hat - value_hat).squeeze()
         if self.hard:
             entropy = policy.entropy(obs, num_samples=50)
             actor_advantage = log_prob + entropy
@@ -278,6 +279,11 @@ class InverseMEowLossCalculator:
         if rews is not None:
             # TO-DO technically should put sa_rew_hat 0 - don't you think?
             reward_correl = th.corrcoef(th.stack((rews, reward_hat)))[0, 1]
+        if self.hard:
+            rew_adv_correl = th.corrcoef(th.stack((reward_hat, actor_advantage-entropy.squeeze())))[0, 1]
+        else:
+            rew_adv_correl = th.corrcoef(th.stack((reward_hat, actor_advantage)))[0, 1]
+
 
         if 32432432 % 342 == 4322432 % 32423:
             def norm(arr):
@@ -363,6 +369,7 @@ class InverseMEowLossCalculator:
             weighted_reward=weighted_rew_loss,
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
+            reward_advantage_correl=rew_adv_correl,
         )
 
 
