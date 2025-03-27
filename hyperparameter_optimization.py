@@ -239,7 +239,7 @@ def search_meow():
     fixed = dict(
         algo="imeow",
         seed=[0, 42, 100, 532, 3432],
-        hard=[False, True],
+        # hard=[False, True],
         reward_type=["next state", "state", "state-action"],
         log_prob_adj_reward=False,
         neg_reward=False,
@@ -247,19 +247,21 @@ def search_meow():
         rew_const=False,#[True, False],
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["hp4", "meow"],
+        extra_tags=["hp5", "meow"],
         early_learning=False,
-        env_name="seals:seals/Hopper-v1",
+        env_name="seals:seals/Pendulum-v1",
         enforce_rew_val_consistency=False,
         gamma=0.995,
         batch_size=64,
-        n_envs=16,
-        norm_reward=[False, True],
-        abs_log_probs=[True, False],
+        # norm_reward=[False, True],
+        # abs_log_probs=[True, False],
         rl_algo="meow",
         consistency_coef=0.,
         lr=1e-3,
-        n_eval_episodes=1,
+        n_eval_episodes=10,
+        learner_timestps=0,
+        convex_opt=[True, False],
+        calc_log_probs=[True, False],
     )
     bounds = dict(
         q_coef=[1., 10.],
@@ -268,7 +270,8 @@ def search_meow():
         # neg_reward=False,
         # maximize_reward=False,
         n_expert_demos=[1, 60],
-        learner_timesteps=[100_000, 3000_000],
+        n_envs = [2, 32],
+        # learner_timesteps=[100_000, 3000_000],
         # gamma=[0.98],#[0.8, 0.999],
         # training_increments=[5, 10],
         # lr=[0.00025, 0.0012],
@@ -277,7 +280,7 @@ def search_meow():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.original_ep_return_mean", debug=False)
+    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.IMEow/reward_correl", debug=False)
 
 
 if __name__ == "__main__":
