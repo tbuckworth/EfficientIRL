@@ -262,7 +262,8 @@ env_expert_algos = {
     "seals:seals/Humanoid-v1": "ppo",
     "seals:seals/Walker2d-v0": "sac",
     "seals:seals/HalfCheetah-v0": "ppo",
-    "seals:seals/Pendulum-v1": "ppo",
+    "seals:seals/Pendulum-v1": "ppo", #Use absorb wrapper?
+    "seals:seals/Swimmer-v1": "ppo",
 }
 
 if __name__ == "__main__":
