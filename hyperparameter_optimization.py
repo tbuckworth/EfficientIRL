@@ -204,27 +204,29 @@ def search_eirl():
         extra_tags=["hp3", "rewards in optimizer"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
-        overrides={"gravity": 15.0},
-        override_env_name=[None, "CartPole-v1"],
+        # overrides={"gravity": 15.0},
+        # override_env_name=[None, "CartPole-v1"],
         enforce_rew_val_consistency=False,
-        reset_weights=[False, True],
+        # reset_weights=[False, True],
         gamma=0.98,
         batch_size=256,
-        n_envs=8,
-        norm_reward=[False, True],
-        net_arch=[[256, 256, 256, 256]]
+        # n_envs=8,
+        # norm_reward=[False, True],
+        net_arch=[[256, 256, 256, 256]],
+        learner_timesteps=0,
         # [512, 512, 512, 512],
         # [128, 128, 128, 128],
         # [64, 128, 256, 64]],
     )
     bounds = dict(
         consistency_coef=[0.1, 1000.],
-        n_epochs=[5, 20],
+        n_epochs=[5, 150],
+        n_envs = [8, 32],
         # log_prob_adj_reward=False,
         # neg_reward=False,
         # maximize_reward=False,
         n_expert_demos=[1, 10],
-        learner_timesteps=[100_000, 1000_000],
+        # learner_timesteps=[100_000, 1000_000],
         # gamma=[0.98],#[0.8, 0.999],
         # training_increments=[5, 10],
         lr=[0.00025, 0.002],
@@ -233,7 +235,7 @@ def search_eirl():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean")
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
 
 def search_meow():
     fixed = dict(
@@ -284,4 +286,4 @@ def search_meow():
 
 
 if __name__ == "__main__":
-    search_meow()
+    search_eirl()
