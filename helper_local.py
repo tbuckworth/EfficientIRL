@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import subprocess
 import time
 
 import gymnasium as gym
@@ -282,6 +283,14 @@ def create_logdir(env_name, seed):
 
 
 def get_latest_model(folder, keyword):
+    if not os.path.exists(folder):
+        remote_dir = os.path.join("vol/bitbucket/tfb115/EfficientIRL", folder)
+        try:
+            os.makedirs(folder)
+            subprocess.check_call(["scp", "-r", remote_dir, folder])
+        except Exception as e:
+            scp_command = f"scp -r {remote_dir} {folder}"
+            raise FileNotFoundError(f"Model not found. Consider Running:\n{scp_command}")
     search = lambda x: re.search(rf"model_{keyword}_(\d*).pth", x)
     if search(folder):
         return folder

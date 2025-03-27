@@ -57,15 +57,13 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=cfg, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
-    if run_from == "RL":
-        learner = load_learner(env_name, wenv, logdir, policy)
-        mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
 
-        learner.learn(total_timesteps=learner_timesteps, callback=RewardLoggerCallback())
-        torch.save({'model_state_dict': learner.policy.state_dict()},
-                   f'{logdir}/model_RL_{learner_timesteps}.pth')
-    else:
-        raise NotImplementedError
+    learner = load_learner(env_name, wenv, logdir, policy)
+    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
+
+    learner.learn(total_timesteps=learner_timesteps, callback=RewardLoggerCallback())
+    torch.save({'model_state_dict': learner.policy.state_dict()},
+               f'{logdir}/model_RL_{learner_timesteps}.pth')
 
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     env.close()
@@ -73,6 +71,7 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
 
 
 if __name__ == "__main__":
-    model_dir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
+    # model_dir = "logs/train/seals:seals/Hopper-v1/2025-03-20__13-47-46__seed_100"
+    model_dir = "logs/train/seals:seals/CartPole-v0/2025-03-27__11-43-05__seed_532"
     tags = ["Continue learning"]
-    main(model_dir, run_from="RL", tags=tags)
+    main(model_dir, run_from="SUP", tags=tags, learner_timesteps=1000_000)
