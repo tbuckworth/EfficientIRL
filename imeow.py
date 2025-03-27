@@ -151,6 +151,8 @@ class InverseMEowLossCalculator:
     q_coef: float
     hard: bool
     abs_log_probs: bool
+    convex_opt: bool
+    calc_log_probs: bool
 
     def __call__(
             self,
@@ -194,6 +196,8 @@ class InverseMEowLossCalculator:
 
         q_val_hat, value_hat, log_prob = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
+        if self.calc_log_probs:
+            log_prob = q_val_hat - value_hat
         if self.hard:
             entropy = policy.entropy(obs, num_samples=50)
             actor_advantage = log_prob + entropy
@@ -230,12 +234,19 @@ class InverseMEowLossCalculator:
 
         q_hat = reward_hat + self.gamma * next_value_hat * (1 - dones.float())
 
+        # rew_est = q_val_hat.squeeze() - self.gamma * next_value_hat * (1-dones.float())
+
         reward_advantage = q_hat - value_hat.squeeze()
 
         if self.abs_log_probs:
             kl_loss = log_prob.abs().mean()
         else:
             kl_loss = -log_prob.mean()
+
+        if self.convex_opt:
+            target_log_prob = 0.5
+            alpha = target_log_prob / 2
+            kl_loss = -(log_prob - log_prob.pow(2) / (4 * alpha))
 
         adv_loss = (actor_advantage - reward_advantage).pow(2).mean()
         q_loss = (q_hat - q_val_hat.squeeze()).pow(2).mean()
@@ -499,6 +510,8 @@ class IMEow(algo_base.DemonstrationAlgorithm):
             q_coef=1.,
             hard=False,
             abs_log_probs=False,
+            convex_opt=False,
+            calc_log_probs=False,
     ):
         """Builds IMEow.
 
@@ -626,7 +639,8 @@ class IMEow(algo_base.DemonstrationAlgorithm):
         )
         self.loss_calculator = InverseMEowLossCalculator(gamma, l2_weight, consistency_coef,
                                                          reward_type, maximize_reward, log_prob_adj_reward,
-                                                         enforce_rew_val_consistency, q_coef, hard, abs_log_probs)
+                                                         enforce_rew_val_consistency, q_coef, hard, abs_log_probs,
+                                                         convex_opt, calc_log_probs)
 
     @property
     def policy(self) -> FlowPolicy:

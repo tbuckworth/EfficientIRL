@@ -108,7 +108,10 @@ def trainIMEow(algo="imeow",
                sigma_max=-0.3,
                sigma_min=-5.0,
                q_coef=1.,
-               hard=False, abs_log_probs=False
+               hard=False,
+               abs_log_probs=False,
+               convex_opt=False,
+               calc_log_probs=False,
                ):
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
@@ -162,7 +165,9 @@ def trainIMEow(algo="imeow",
             sigma_min=sigma_min,
             q_coef=q_coef,
             hard=hard,
-            abs_log_probs=abs_log_probs
+            abs_log_probs=abs_log_probs,
+            convex_opt=convex_opt,
+            calc_log_probs=calc_log_probs,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")
@@ -257,6 +262,7 @@ env_expert_algos = {
     "seals:seals/Humanoid-v1": "ppo",
     "seals:seals/Walker2d-v0": "sac",
     "seals:seals/HalfCheetah-v0": "ppo",
+    "seals:seals/Pendulum-v1": "ppo",
 }
 
 if __name__ == "__main__":
@@ -271,10 +277,13 @@ if __name__ == "__main__":
             n_expert_demos=1,
             n_eval_episodes=1,
             rl_algo="meow",
-            model_file=None,
+            model_file=model_file,
             n_epochs=150,
             reward_type="next state",
             extra_tags=["meow"],
             learner_timesteps=3000_000,
             env_name="seals:seals/Hopper-v1",
+            #TODO: try these out, maybe use pendulum
+            convex_opt=False,
+            calc_log_probs=False,
         )
