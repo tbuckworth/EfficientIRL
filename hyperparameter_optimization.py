@@ -201,7 +201,7 @@ def search_eirl():
         rew_const=False,
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["eirl2"],
+        extra_tags=["eirl2", "fixed"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         # overrides={"gravity": 15.0},
