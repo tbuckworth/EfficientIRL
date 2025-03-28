@@ -251,7 +251,7 @@ class EfficientIRLLossCalculator:
 
         prob_true_act = th.exp(log_prob).mean()
 
-        rew_adv_loss = reward_advantage.pow(2).mean()
+        rew_adv_loss = reward_advantage.mean().abs()
 
         if dones.any():
             pass
