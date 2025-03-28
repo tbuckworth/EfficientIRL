@@ -8,6 +8,7 @@ from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
+import eirl2
 from CustomEnvMonitor import CartpoleVecEnvActionFlipWrapper
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
@@ -90,8 +91,13 @@ def trainEIRL(algo="eirl",
     if model_file is not None:
         policy.load_state_dict(torch.load(model_file, map_location=policy.device)["model_state_dict"])
 
-    if algo == "eirl":
-        expert_trainer = eirl.EIRL(
+    if algo in ["eirl","eirl2"]:
+        agent = None
+        if algo == "eirl":
+            agent = eirl.EIRL
+        elif algo == "eirl2":
+            agent = eirl2.EIRL
+        expert_trainer = agent(
             policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
@@ -112,7 +118,7 @@ def trainEIRL(algo="eirl",
             rew_const=rew_const,
             disc_coef=disc_coef,
             #TODO: remove this unless you want loads of plots:!
-            logdir=logdir,
+            # logdir=logdir,
         )
     elif algo == "bc":
         expert_trainer = bc.BC(

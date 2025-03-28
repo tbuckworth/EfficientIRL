@@ -191,7 +191,7 @@ def run_forever(bounds, fixed, run_func, opt_metric, abs=False, debug=False):
 
 def search_eirl():
     fixed = dict(
-        algo="eirl",
+        algo="eirl2",
         seed=[0, 42, 100, 532, 3432],
         hard=False,
         reward_type=["next state", "state", "state-action", "next state only"],
@@ -201,7 +201,7 @@ def search_eirl():
         rew_const=False,
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["disentanglement test2"],
+        extra_tags=["eirl2"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         # overrides={"gravity": 15.0},

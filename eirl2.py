@@ -105,6 +105,7 @@ class EIRLTrainingMetrics:
     weighted_reward: Optional[th.Tensor]
     rew_adv_loss: Optional[th.Tensor]
     reward_advantage_correl: Optional[th.Tensor]
+    advantage_consistency_loss: Optional[th.Tensor]
 
 
 def get_latents(policy, obs):
@@ -175,7 +176,7 @@ class EfficientIRLLossCalculator:
             policy: policies.ActorCriticPolicy,
             reward_func: RewardNet,
             state_reward_func: RewardNet,
-            lp_adj_reward: RewardNet,
+            next_state_adv_func: RewardNet,
             obs: Union[
                 types.AnyTensor,
                 types.DictObs,
@@ -193,7 +194,7 @@ class EfficientIRLLossCalculator:
             rews: Union[th.Tensor, np.ndarray] = None,
             one_hot_acts: Union[th.Tensor, np.ndarray] = None,
             rew_const: Union[th.Tensor, np.ndarray] = 0,
-            epoch = None,
+            epoch=None,
     ) -> EIRLTrainingMetrics:
         """Calculate the supervised learning loss used to train the behavioral clone.
 
@@ -206,21 +207,11 @@ class EfficientIRLLossCalculator:
             A EIRLTrainingMetrics object with the loss and all the components it
             consists of.
         """
-        # tensor_obs = types.map_maybe_dict(
-        #     util.safe_to_tensor,
-        #     types.maybe_unwrap_dictobs(obs),
-        # )
         acts = util.safe_to_tensor(acts)
         obs = obs.to(th.float32)
         nobs = nobs.to(th.float32)
-        # policy.evaluate_actions's type signatures are incorrect.
-        # See https://github.com/DLR-RM/stable-baselines3/issues/1679
-        # (_, log_prob, entropy) = policy.evaluate_actions(
-        #     tensor_obs,  # type: ignore[arg-type]
-        #     acts,
-        # )
+
         value_hat, log_prob, entropy = policy.evaluate_actions(obs, acts)
-        # value_hat, log_prob, entropy = evaluate_actions(policy, obs, acts)
         actor_advantage = log_prob
         if self.hard:
             actor_advantage = log_prob + entropy
@@ -234,29 +225,19 @@ class EfficientIRLLossCalculator:
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
             # This loss just makes sa_rew imitate ns_rew, because we ultimately want to export sa_rew
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
-
-            loss3 = rew_cons_loss
         elif self.reward_type == "next state only":
             reward_hat = state_reward_func(obs, None, nobs, None)
-            loss3 = 0
+            rew_cons_loss = 0
         else:
             # This could be a state reward function or a state action reward function:
             reward_hat = reward_func(obs, one_hot_acts, None, None)
-            loss3 = 0
+            rew_cons_loss = 0
+
+        ns_adv_target = next_state_adv_func(nobs, None, obs, None)
+        # We leave final obs:
+        adv_cons_loss = ((actor_advantage - ns_adv_target) * (1 - dones.float())).pow(2).mean()
 
         reward_hat = reward_hat + rew_const
-
-        if self.log_prob_adj_reward:
-            lp_rew = lp_adj_reward(obs, one_hot_acts, None, None)
-            target = reward_hat.detach() - log_prob.detach()
-            lp_loss = (lp_rew - target).pow(2).mean()
-        else:
-            lp_loss = 0
-
-        if self.maximize_reward:
-            loss4 = -(reward_hat * log_prob).mean()
-        else:
-            loss4 = 0
 
         next_value_hat = policy.predict_values(nobs).squeeze()
 
@@ -269,15 +250,11 @@ class EfficientIRLLossCalculator:
         disc_loss = (d - 0.5).pow(2).mean()
 
         loss1 = -log_prob.mean()
-
-        loss2 = (actor_advantage - reward_advantage).pow(2).mean()
+        loss2 = (actor_advantage.detach() - reward_advantage).pow(2).mean()
 
         prob_true_act = th.exp(log_prob).mean()
 
-        if self.enforce_rew_val_consistency:
-            rew_adv_loss = reward_advantage.pow(2).mean()
-        else:
-            rew_adv_loss = 0
+        rew_adv_loss = reward_advantage.pow(2).mean()
 
         if dones.any():
             pass
@@ -294,7 +271,7 @@ class EfficientIRLLossCalculator:
         # should we add l2 to the loss?
 
         loss = loss1 + (
-                loss2 + loss3 + loss4 + lp_loss) * self.consistency_coef + l2_loss + rew_adv_loss + disc_loss * self.disc_coef
+                loss2 + rew_cons_loss + adv_cons_loss) * self.consistency_coef + l2_loss + rew_adv_loss + disc_loss * self.disc_coef
 
         reward_correl = None
         if rews is not None:
@@ -352,17 +329,16 @@ class EfficientIRLLossCalculator:
         return EIRLTrainingMetrics(
             kl_loss=loss1,
             consistency_loss=loss2,
-            reward_loss=loss3,
-            log_prob_rew_loss=lp_loss,
+            reward_loss=rew_cons_loss,
             entropy=entropy.mean(),
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
             loss=loss,
-            weighted_reward=loss4,
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
             reward_advantage_correl=rew_adv_correl,
+            advantage_consistency_loss=adv_cons_loss,
         )
 
     def plot_rewards_vs_obs(self, i, i_name, obs, reward_hat, rews, epoch):
@@ -380,7 +356,7 @@ class EfficientIRLLossCalculator:
         )
         plt.legend()
         plt.title(f"{i_name} vs Rewards (Cartpole)")
-        plt.savefig(os.path.join(self.logdir,f"rew_epoch_{epoch}.png"))
+        plt.savefig(os.path.join(self.logdir, f"rew_epoch_{epoch}.png"))
         plt.close()
 
     def plot_hist_rewards(self, reward_hat, rews, epoch):
@@ -396,7 +372,7 @@ class EfficientIRLLossCalculator:
         )
         plt.legend()
         plt.title("Learned Rewards Bucketed by True Reward Category")
-        plt.savefig(os.path.join(self.logdir,f"hist_epoch_{epoch}.png"))
+        plt.savefig(os.path.join(self.logdir, f"hist_epoch_{epoch}.png"))
         plt.close()
 
 
@@ -611,7 +587,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 lr_schedule=lambda _: th.finfo(th.float32).max,
                 features_extractor_class=extractor,
             )
-        self.lp_adj_reward = self.state_reward_func = None
+        self.next_state_adv_func = self.state_reward_func = None
         if reward_func is None:
             if preprocessing.is_image_space(observation_space):
                 reward_constructor = CnnRewardNet
@@ -652,15 +628,15 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             else:
                 raise NotImplementedError(f"reward_type {reward_type} not implemented")
             if log_prob_adj_reward:
-                lp_adj_reward = reward_constructor(observation_space=observation_space,
-                                                   action_space=action_space,
-                                                   use_state=True,
-                                                   use_action=True,
-                                                   use_next_state=False,
-                                                   use_done=False,
-                                                   )
-                self.lp_adj_reward = lp_adj_reward.to(utils.get_device(device))
-                self.param_list += list(self.lp_adj_reward.parameters())
+                next_state_adv_func = reward_constructor(observation_space=observation_space,
+                                                         action_space=action_space,
+                                                         use_state=False,
+                                                         use_action=False,
+                                                         use_next_state=True,
+                                                         use_done=False,
+                                                         )
+                self.next_state_adv_func = next_state_adv_func.to(utils.get_device(device))
+                self.param_list += list(self.next_state_adv_func.parameters())
         self.reward_func = reward_func.to(utils.get_device(device))
         self.param_list += list(self.reward_func.parameters())
         self.reward_const = 0
@@ -835,7 +811,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
             else:
                 epoch = None
             training_metrics = self.loss_calculator(self.policy, self.reward_func, self.state_reward_func,
-                                                    self.lp_adj_reward, obs_tensor,
+                                                    self.next_state_adv_func, obs_tensor,
                                                     acts, nobs_tensor, dones, rews, one_hot_acts, self.reward_const,
                                                     epoch)
 
