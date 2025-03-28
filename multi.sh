@@ -15,4 +15,4 @@ export MUJOCO_PATH=/vol/bitbucket/tfb115/mujoco-2.3.0
 export MUJOCO_PLUGIN_PATH=/vol/bitbucket/tfb115/mujoco-2.3.0/plugins
 pip install mujoco==2.3.0
 sleep 60
-python3 /vol/bitbucket/${USER}/EfficientIRL/multi_train.py --n $1
+#python3 /vol/bitbucket/${USER}/EfficientIRL/multi_train.py --n $1
