@@ -1,4 +1,5 @@
 import os
+import re
 
 import numpy as np
 import torch
@@ -7,6 +8,7 @@ from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
+from CustomEnvMonitor import CartpoleVecEnvActionFlipWrapper
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, init_policy_weights, get_target_rewards, \
@@ -66,7 +68,10 @@ def trainEIRL(algo="eirl",
               reset_weights=False,
               rew_const=False,
               disc_coef=0.,
+              flip_cartpole_actions=False,
               ):
+    if flip_cartpole_actions and not re.search("CartPole", env_name):
+        raise Exception(f"flip_cartpole_actions only works for CartPole envs")
     if net_arch is None:
         net_arch = [256, 256, 256, 256]
     if expert_algo is None:
@@ -151,6 +156,8 @@ def trainEIRL(algo="eirl",
         return
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)
+    if flip_cartpole_actions:
+        wenv = CartpoleVecEnvActionFlipWrapper(wenv)
     if overrides is not None:
         target_rewards = get_target_rewards(env, expert, n_eval_episodes)
         print(f"Expert Target Rewards in Overridden Environment:{target_rewards:.2f}")

@@ -23,6 +23,8 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.vec_env import VecNormalize
 
+from CustomEnvMonitor import CartpoleVecEnvActionFlipWrapper
+
 try:
     import private_login
 except ImportError:
@@ -422,3 +424,6 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., r
         reward_fn=predict_processed,
     )
     return venv_wrapped
+
+def wrap_cartpole_with_flipped_actions(venv):
+    return CartpoleVecEnvActionFlipWrapper(venv)

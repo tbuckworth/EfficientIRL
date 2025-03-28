@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from imitation.util.util import make_seeds
+from stable_baselines3.common import vec_env
 from stable_baselines3.common.monitor import Monitor
 
 import time
@@ -11,9 +12,11 @@ import gymnasium as gym
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 import functools
 
+
 class CustomEnvMonitor(Monitor):
     original_rewards: List[float] = []
     episode_orig_returns: List[float] = []
+
     def step(self, action: ActType) -> Tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Step the environment with the given action
@@ -80,10 +83,10 @@ class CustomEnvMonitor(Monitor):
         return self.episode_orig_returns
 
 
-
 class ExternalEnvMonitor(Monitor):
     original_rewards: List[float] = []
     episode_orig_returns: List[float] = []
+
     def step(self, action: ActType) -> Tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Step the environment with the given action
@@ -130,17 +133,16 @@ class ExternalEnvMonitor(Monitor):
         return self.env.reset()
 
 
-
 def make_vec_env(
-    env_name: str,
-    *,
-    rng: np.random.Generator,
-    n_envs: int = 8,
-    parallel: bool = False,
-    log_dir: Optional[str] = None,
-    max_episode_steps: Optional[int] = None,
-    post_wrappers: Optional[Sequence[Callable[[gym.Env, int], gym.Env]]] = None,
-    env_make_kwargs: Optional[Mapping[str, Any]] = None,
+        env_name: str,
+        *,
+        rng: np.random.Generator,
+        n_envs: int = 8,
+        parallel: bool = False,
+        log_dir: Optional[str] = None,
+        max_episode_steps: Optional[int] = None,
+        post_wrappers: Optional[Sequence[Callable[[gym.Env, int], gym.Env]]] = None,
+        env_make_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> VecEnv:
     """Makes a vectorized environment.
 
@@ -218,3 +220,38 @@ def make_vec_env(
         return SubprocVecEnv(env_fns, start_method="forkserver")
     else:
         return DummyVecEnv(env_fns)
+
+
+class CartpoleVecEnvActionFlipWrapper(vec_env.VecEnvWrapper):
+    """
+    Just reverses cartpole actions.
+    Think of it as changing the transition function - when you try to move left, the transition function sends you right
+     and vice versa.
+    Peforming well from a learned reward, means the learned reward must be disentangled from environment dynamics.
+    """
+
+    def __init__(
+            self,
+            venv: vec_env.VecEnv,
+    ):
+        super().__init__(venv)
+        self.reset()
+
+    @property
+    def envs(self):
+        return self.venv.envs
+
+    def reset(self):
+        self._old_obs = self.venv.reset()
+        return self._old_obs
+
+    def step_async(self, actions):
+        flipped_actions = np.zeros_like(actions)
+        flipped_actions[actions == 0] = 1
+        self._actions = flipped_actions
+        return self.venv.step_async(flipped_actions)
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        self._old_obs = obs
+        return obs, rews, dones, infos
