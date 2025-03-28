@@ -113,7 +113,7 @@ def sample_trajectory(forward_policy, env, init_state, max_steps=10):
 # The objective is to match the forward-generated trajectory distribution with that defined by the reward.
 def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, reward_net, Z, gamma=0.99):
     traj_tensor = torch.stack(traj, dim=0)  # shape: [T+1, state_dim]
-    # T = traj_tensor.size(0) - 1
+    T = traj_tensor.size(0) - 1
 
     # log_forward = 0.0
     # for t in range(T):
@@ -124,7 +124,7 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
 
     # same thing, but vectorized:
     probs = forward_policy(traj_tensor)
-    log_forward = torch.log(probs[[i for i in range(len(actions))], actions]).sum()
+    log_forwards = torch.log(probs[[i for i in range(len(actions))], actions])
 
     # For backward, assume a fixed reverse mapping (e.g. up <-> down, right <-> left)
     backward_action_map = {0: 2, 1: 3, 2: 0, 3: 1}
@@ -140,8 +140,7 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     fwd_action = actions[:-1]
     back_action = [backward_action_map[k] for k in fwd_action]
     probs = backward_policy(traj_tensor[1:-1])
-    log_backward = torch.log(probs[[i for i in range(len(probs))], back_action]).sum()
-
+    log_backwards = torch.log(probs[[i for i in range(len(probs))], back_action])
     # # Compute reward from the terminal state.
     # terminal_state = traj_tensor[-1].unsqueeze(0)
     # # For a terminal state we use the simple r(s) output.
@@ -149,8 +148,22 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     # # To ensure positivity, we exponentiate.
     # R_x = torch.exp(reward)
 
-    reward = reward_net(traj_tensor).sum()
+    rewards = reward_net(traj_tensor)
+    loss = None
+    for i in range(0,traj_tensor.size(0)):
+        log_forward = log_forwards[:-i].sum()
+        log_backward = log_backwards[:-i].sum()
+        reward = rewards[:-i].sum()
+        subloss = (log_forward - reward - log_backward) ** 2
+        if loss is None:
+            loss = subloss
+        else:
+            loss = loss + subloss
+    return loss
 
+    log_forward = log_forwards.sum()
+    log_backward = log_backwards.sum()
+    reward = rewards.sum()
 
     # Z is a learnable scalar (normalisation constant)
     log_Z = torch.log(Z + 1e-8)
@@ -198,10 +211,10 @@ def main():
             states = torch.cat([t.unsqueeze(0) for t in traj], dim=0)
             # full_rew = reward_net(states,states[1:])
             rews = reward_net.r_net(states)
-            print(torch.cat((states, rews), axis=-1).round(decimals=2))
+            print(torch.cat((states, rews-rews.min()), axis=-1).round(decimals=2))
 
     print("done")
-
+    full_rews = torch.stack([reward_net(states[i], states[i+1]).detach() for i in range(len(states)-1)],dim=0)
 
 if __name__ == "__main__":
     main()
