@@ -292,4 +292,4 @@ def search_meow():
 
 
 if __name__ == "__main__":
-    search_meow()
+    search_eirl()
