@@ -165,6 +165,8 @@ def trainEIRL(algo="eirl",
     if reset_weights:
         learner.policy.apply(init_policy_weights)
     learner.learn(learner_timesteps, callback=RewardLoggerCallback())
+    if flip_cartpole_actions:
+        env = CartpoleVecEnvActionFlipWrapper(env)
     mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
     torch.save({'model_state_dict': learner.policy.state_dict()},
                f'{logdir}/model_RL_{learner_timesteps}.pth')
