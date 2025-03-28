@@ -83,7 +83,7 @@ def trainEIRL(algo="eirl",
     np.save(os.path.join(logdir, "config.npy"), locals())
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=locals(), tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
-    default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(env_name, n_envs, n_eval_episodes,
+    default_rng, env, expert_transitions, target_rewards, expert, expert_rollouts = load_expert_transitions(env_name, n_envs, n_eval_episodes,
                                                                                    n_expert_demos, seed, expert_algo,
                                                                                    norm_reward)
 
@@ -131,6 +131,17 @@ def trainEIRL(algo="eirl",
             l2_weight=l2_weight,
             optimizer_cls=torch.optim.Adam,
             optimizer_kwargs={"lr": lr},
+        )
+    elif algo == "gflow":
+        expert_trainer = gflow.GFLOW(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            demonstrations=expert_rollouts,
+            gamma=gamma,
+            batch_size=batch_size,
+            l2_weight=l2_weight,
+            rng=default_rng,
+            custom_logger=custom_logger,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")

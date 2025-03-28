@@ -166,7 +166,7 @@ def load_expert_transitions(env_name, n_envs, n_eval_episodes, n_expert_demos=50
                                                                              n_eval_episodes, n_expert_demos,
                                                                              norm_reward, seed)
     expert_transitions = rollout.flatten_trajectories_with_rew(expert_rollouts)
-    return default_rng, env, expert_transitions, target_rewards, expert
+    return default_rng, env, expert_transitions, target_rewards, expert, expert_rollouts
 
 
 def load_cartpole_ppo_expert(env):

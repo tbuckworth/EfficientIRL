@@ -123,7 +123,7 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     #     log_forward += torch.log(probs[action] + 1e-8)
 
     # same thing, but vectorized:
-    probs = forward_policy(traj_tensor)
+    probs = forward_policy(traj_tensor)#[:-1] might be more informative - wouldn't change anything
     log_forwards = torch.log(probs[[i for i in range(len(actions))], actions])
 
     # For backward, assume a fixed reverse mapping (e.g. up <-> down, right <-> left)
@@ -137,9 +137,9 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     #     probs = backward_policy(next_state).squeeze(0)
     #     log_backward += torch.log(probs[back_action] + 1e-8)
 
-    fwd_action = actions[:-1]
+    fwd_action = actions
     back_action = [backward_action_map[k] for k in fwd_action]
-    probs = backward_policy(traj_tensor[1:-1])
+    probs = backward_policy(traj_tensor[1:])
     log_backwards = torch.log(probs[[i for i in range(len(probs))], back_action])
     # # Compute reward from the terminal state.
     # terminal_state = traj_tensor[-1].unsqueeze(0)
@@ -147,8 +147,17 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     # reward = reward_net(terminal_state)
     # # To ensure positivity, we exponentiate.
     # R_x = torch.exp(reward)
+    # Z is a learnable scalar (normalisation constant)
+    log_Z = torch.log(Z + 1e-8)
 
-    rewards = reward_net(traj_tensor)
+    rewards = reward_net(traj_tensor).squeeze()
+
+    log_forward = log_forwards.cumsum(dim=0)
+    log_backward = log_backwards.cumsum(dim=0)
+    reward = rewards[0] + rewards[1:].cumsum(dim=0)
+    loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
+    return loss
+
     loss = None
     for i in range(0,traj_tensor.size(0)):
         log_forward = log_forwards[:-i].sum()
@@ -165,8 +174,7 @@ def trajectory_balance_loss(traj, actions, forward_policy, backward_policy, rewa
     log_backward = log_backwards.sum()
     reward = rewards.sum()
 
-    # Z is a learnable scalar (normalisation constant)
-    log_Z = torch.log(Z + 1e-8)
+
 
     # Trajectory Balance: (log(Z) + sum(log forward) - log R(x) - sum(log backward))^2
     loss = (log_Z + log_forward - reward - log_backward) ** 2

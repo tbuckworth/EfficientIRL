@@ -179,7 +179,7 @@ class TestHopperLearner(unittest.TestCase):
         self.learner.learn(1000_000)
 
     def test_trainer(self):
-        default_rng, env, expert_transitions, target_rewards, expert = load_expert_transitions(
+        default_rng, env, expert_transitions, target_rewards, expert, _ = load_expert_transitions(
             self.cfg["env_name"],
             self.cfg["n_envs"],
             1,#self.cfg["n_eval_episodes"],
