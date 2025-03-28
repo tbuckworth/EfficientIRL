@@ -588,55 +588,54 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 features_extractor_class=extractor,
             )
         self.next_state_adv_func = self.state_reward_func = None
-        if reward_func is None:
-            if preprocessing.is_image_space(observation_space):
-                reward_constructor = CnnRewardNet
-            else:
-                reward_constructor = BasicRewardNet
-            if reward_type in ["next state", "next state only"]:
-                state_reward_func = reward_constructor(observation_space=observation_space,
-                                                       action_space=action_space,
-                                                       use_state=False,
-                                                       use_action=False,
-                                                       use_next_state=True,
-                                                       use_done=False,
-                                                       )
-                reward_func = reward_constructor(observation_space=observation_space,
+        if preprocessing.is_image_space(observation_space):
+            reward_constructor = CnnRewardNet
+        else:
+            reward_constructor = BasicRewardNet
+        if reward_type in ["next state", "next state only"]:
+            state_reward_func = reward_constructor(observation_space=observation_space,
+                                                   action_space=action_space,
+                                                   use_state=False,
+                                                   use_action=False,
+                                                   use_next_state=True,
+                                                   use_done=False,
+                                                   )
+            reward_func = reward_constructor(observation_space=observation_space,
+                                             action_space=action_space,
+                                             use_state=True,
+                                             use_action=True,
+                                             use_next_state=False,
+                                             use_done=False,
+                                             )
+            self.state_reward_func = state_reward_func.to(utils.get_device(device))
+            self.param_list += list(self.state_reward_func.parameters())
+        elif reward_type == "state":
+            reward_func = reward_constructor(observation_space=observation_space,
+                                             action_space=action_space,
+                                             use_state=True,
+                                             use_action=False,
+                                             use_next_state=False,
+                                             use_done=False, )
+        elif reward_type == "state-action":
+            reward_func = reward_constructor(observation_space=observation_space,
+                                             action_space=action_space,
+                                             use_state=True,
+                                             use_action=True,
+                                             use_next_state=False,
+                                             use_done=False,
+                                             )
+        else:
+            raise NotImplementedError(f"reward_type {reward_type} not implemented")
+
+        next_state_adv_func = reward_constructor(observation_space=observation_space,
                                                  action_space=action_space,
-                                                 use_state=True,
-                                                 use_action=True,
-                                                 use_next_state=False,
-                                                 use_done=False,
-                                                 )
-                self.state_reward_func = state_reward_func.to(utils.get_device(device))
-                self.param_list += list(self.state_reward_func.parameters())
-            elif reward_type == "state":
-                reward_func = reward_constructor(observation_space=observation_space,
-                                                 action_space=action_space,
-                                                 use_state=True,
+                                                 use_state=False,
                                                  use_action=False,
-                                                 use_next_state=False,
-                                                 use_done=False, )
-            elif reward_type == "state-action":
-                reward_func = reward_constructor(observation_space=observation_space,
-                                                 action_space=action_space,
-                                                 use_state=True,
-                                                 use_action=True,
-                                                 use_next_state=False,
+                                                 use_next_state=True,
                                                  use_done=False,
                                                  )
-            else:
-                raise NotImplementedError(f"reward_type {reward_type} not implemented")
-            if log_prob_adj_reward:
-                next_state_adv_func = reward_constructor(observation_space=observation_space,
-                                                         action_space=action_space,
-                                                         use_state=False,
-                                                         use_action=False,
-                                                         use_next_state=True,
-                                                         use_done=False,
-                                                         )
-                self.next_state_adv_func = next_state_adv_func.to(utils.get_device(device))
-                self.param_list += list(self.next_state_adv_func.parameters())
+        self.next_state_adv_func = next_state_adv_func.to(utils.get_device(device))
+        self.param_list += list(self.next_state_adv_func.parameters())
         self.reward_func = reward_func.to(utils.get_device(device))
         self.param_list += list(self.reward_func.parameters())
         self.reward_const = 0
