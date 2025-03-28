@@ -13,9 +13,8 @@ import eirl
 from learner_configs import load_ant_ppo_learner, load_ant_sac_learner, load_learner
 from callbacks import RewardLoggerCallback
 from helper_local import import_wandb, get_config, load_env, get_policy_for, load_expert_transitions, create_logdir, \
-    get_latest_model
+    get_latest_model, wrap_env_with_reward
 from eirl import load_expert_trainer
-from train_EIRL import wrap_env_with_reward
 import gymnasium as gym
 wandb = import_wandb()
 

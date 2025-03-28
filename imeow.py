@@ -212,6 +212,9 @@ class InverseMEowLossCalculator:
             reward_hat = ns_rew_hat * (1 - dones.float()) + sa_rew_hat * dones.float()
             # This loss just makes sa_rew imitate ns_rew, because we ultimately want to export sa_rew
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
+        elif self.reward_type == "next state only":
+            reward_hat = state_reward_func(obs, None, nobs, None)
+            rew_cons_loss = 0
         else:
             # This could be a state reward function or a state action reward function:
             reward_hat = reward_func(obs, one_hot_acts, None, None)
@@ -584,7 +587,7 @@ class IMEow(algo_base.DemonstrationAlgorithm):
                 reward_constructor = CnnRewardNet
             else:
                 reward_constructor = BasicRewardNet
-            if reward_type == "next state":
+            if reward_type in ["next state", "next state only"]:
                 state_reward_func = reward_constructor(observation_space=observation_space,
                                                        action_space=action_space,
                                                        use_state=False,

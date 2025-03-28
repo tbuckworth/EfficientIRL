@@ -15,7 +15,7 @@ import imeow
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
 from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
-    init_policy_weights, load_env, get_config, load_reward_models
+    init_policy_weights, load_env, get_config, load_reward_models, wrap_env_with_reward
 from meow.meow_continuous_action import FlowPolicy, MEOW, create_envs_meow
 from modified_cartpole import overridden_vec_env
 
@@ -25,39 +25,6 @@ wandb = import_wandb()
 import eirl
 from learner_configs import load_learner
 
-
-def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., ):
-    n_actions = None
-    is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    if is_discrete:
-        n_actions = env.action_space.n
-
-    def predict_processed(
-            state: np.ndarray,
-            action: np.ndarray,
-            next_state: np.ndarray = None,
-            done: np.ndarray = None,
-            **kwargs,
-    ) -> np.ndarray:
-        # this is for the reward function signature
-
-        with torch.no_grad():
-            obs = torch.FloatTensor(state).to(device=reward_func.device)
-            if is_discrete:
-                acts = torch.nn.functional.one_hot(torch.LongTensor(action), n_actions).to(device=reward_func.device)
-            else:
-                acts = torch.FloatTensor(action).to(device=reward_func.device)
-            rew = reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
-            if neg_reward:
-                return -rew
-            return rew + rew_const_adj
-
-    venv_buffering = wrappers.BufferingWrapper(env)
-    venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
-        venv_buffering,
-        reward_fn=predict_processed,
-    )
-    return venv_wrapped
 
 
 class WandbInfoLogger(BaseCallback):

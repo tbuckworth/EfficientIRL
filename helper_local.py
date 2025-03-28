@@ -5,7 +5,7 @@ import subprocess
 import time
 
 import gymnasium as gym
-from imitation.data import types, rollout
+from imitation.data import types, rollout, wrappers
 from typing import List, Any, Mapping, Iterable, Sequence
 
 import numpy as np
@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
+from imitation.rewards import reward_wrapper
 from imitation.util.util import make_vec_env
 from stable_baselines3 import TD3, PPO
 from stable_baselines3.common import torch_layers
@@ -370,3 +371,53 @@ def load_reward_models(cfg, expert_trainer, model_file, policy):
                        )["reward_const"])
     except Exception as e:
         pass
+
+
+def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., reward_type="state-action"):
+    n_actions = None
+    is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    if is_discrete:
+        n_actions = env.action_space.n
+
+    if reward_type == "next state only":
+        def predict_processed(
+                state: np.ndarray,
+                action: np.ndarray,
+                next_state: np.ndarray = None,
+                done: np.ndarray = None,
+                **kwargs,
+        ) -> np.ndarray:
+            # this is for the reward function signature
+            with torch.no_grad():
+                # obs = torch.FloatTensor(state).to(device=reward_func.device)
+                nobs = torch.FloatTensor(next_state).to(device=reward_func.device)
+                rew = reward_func(nobs, None, nobs, None).squeeze().detach().cpu().numpy()
+                if neg_reward:
+                    return -rew
+                return rew + rew_const_adj
+    else:
+        def predict_processed(
+                state: np.ndarray,
+                action: np.ndarray,
+                next_state: np.ndarray = None,
+                done: np.ndarray = None,
+                **kwargs,
+        ) -> np.ndarray:
+            # this is for the reward function signature
+            with torch.no_grad():
+                obs = torch.FloatTensor(state).to(device=reward_func.device)
+                if is_discrete:
+                    acts = torch.nn.functional.one_hot(torch.LongTensor(action), n_actions).to(device=reward_func.device)
+                else:
+                    acts = torch.FloatTensor(action).to(device=reward_func.device)
+                rew = reward_func(obs, acts, None, None).squeeze().detach().cpu().numpy()
+                if neg_reward:
+                    return -rew
+                return rew + rew_const_adj
+
+    venv_buffering = wrappers.BufferingWrapper(env)
+    venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
+        venv_buffering,
+        reward_fn=predict_processed,
+    )
+    return venv_wrapped
