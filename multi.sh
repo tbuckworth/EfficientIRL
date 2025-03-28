@@ -11,4 +11,6 @@ TERM=vt100
 /usr/bin/nvidia-smi
 export CUDA_DIR=/vol/cuda/12.2.0/:${CUDAPATH}
 export XLA_FLAGS=--xla_gpu_cuda_data_dir=/vol/cuda/12.2.0/
+pip install mujoco==2.3.0
+sleep 60
 python3 /vol/bitbucket/${USER}/EfficientIRL/multi_train.py --n $1
