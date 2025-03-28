@@ -390,8 +390,8 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., r
             # this is for the reward function signature
             with torch.no_grad():
                 # obs = torch.FloatTensor(state).to(device=reward_func.device)
-                nobs = torch.FloatTensor(next_state).to(device=reward_func.device)
-                rew = reward_func(nobs, None, nobs, None).squeeze().detach().cpu().numpy()
+                obs = torch.FloatTensor(state).to(device=reward_func.device)
+                rew = reward_func(obs, None, obs, None).squeeze().detach().cpu().numpy()
                 if neg_reward:
                     return -rew
                 return rew + rew_const_adj
