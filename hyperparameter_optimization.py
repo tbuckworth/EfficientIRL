@@ -289,7 +289,7 @@ def search_meow():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.IMEow/reward_correl", debug=False)
+    run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.IMEow/reward_correl", debug=True)
 
 
 if __name__ == "__main__":
