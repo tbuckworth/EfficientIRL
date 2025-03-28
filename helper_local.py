@@ -22,6 +22,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.vec_env import VecNormalize
 
+try:
+    import private_login
+except ImportError:
+    pass
 
 class DictToArgs:
     def __init__(self, input_dict):
@@ -282,16 +286,40 @@ def create_logdir(env_name, seed):
     return logdir
 
 
+def scp_request_pword(remote_dir, folder):
+    import getpass
+    import pexpect
+    import sys
+    # rsa_password = getpass.getpass("Enter RSA passphrase: ")
+    rsa_password = private_login.rsa_passphrase
+    # Spawn the scp process
+    child = pexpect.spawn(f"scp -r {remote_dir} {folder}", encoding='utf-8')
+    # Look for the password prompt and then send the password
+    child.logfile = sys.stdout
+    # Look for a passphrase prompt, EOF, or timeout
+    index = child.expect([r"(?i)passphrase", pexpect.EOF, pexpect.TIMEOUT])
+    if index == 0:
+        child.sendline(rsa_password)
+        child.expect(pexpect.EOF)
+    elif index == 1:
+        # Process finished without asking for a passphrase
+        pass
+    else:
+        raise TimeoutError("Timed out waiting for the passphrase prompt.")
+
+
 def get_latest_model(folder, keyword):
-    if not os.path.exists(folder):
-        remote_dir = os.path.join("vol/bitbucket/tfb115/EfficientIRL", folder)
-        try:
-            os.makedirs(folder)
-            process = subprocess.Popen(["scp", "-r", remote_dir, folder])
-            process.wait()  # This will block until the process finishes
-        except Exception as e:
-            scp_command = f"scp -r {remote_dir} {folder}"
-            raise FileNotFoundError(f"Model not found. Consider Running:\n{scp_command}")
+    if not os.path.exists(folder) or len(os.listdir(folder)) == 0:
+        remote_dir = os.path.join("tfb115@shell1.doc.ic.ac.uk:/vol/bitbucket/tfb115/EfficientIRL", folder)
+        sup_folder = os.path.dirname(folder)
+        if not os.path.exists(sup_folder):
+            os.makedirs(sup_folder)
+        scp_request_pword(remote_dir, sup_folder)
+        # process = subprocess.Popen(["scp", "-r", remote_dir, folder])
+        # exit_code = process.wait()  # This will block until the process finishes
+        # if exit_code != 0:
+        #     scp_command = f"scp -r {remote_dir} {folder}"
+        #     raise FileNotFoundError(f"Model not found. Consider Running:\n{scp_command}")
     search = lambda x: re.search(rf"model_{keyword}_(\d*).pth", x)
     if search(folder):
         return folder

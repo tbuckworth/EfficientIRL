@@ -14,7 +14,7 @@ from imitation.util import logger as imit_logger
 wandb = import_wandb()
 
 
-def main(model_dir, run_from, tags, learner_timesteps=5000_000):
+def main(model_dir, run_from, tags, learner_timesteps=5000_000, continue_type="learn", n_epochs=1):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_file = get_latest_model(model_dir, run_from)
     sup_model_file = get_latest_model(model_dir, "SUP")
@@ -58,9 +58,11 @@ def main(model_dir, run_from, tags, learner_timesteps=5000_000):
     wandb.init(project="EfficientIRL", sync_tensorboard=True, config=cfg, tags=tags)
     custom_logger = imit_logger.configure(logdir, ["stdout", "csv", "tensorboard"])
 
-
-    learner = load_learner(env_name, wenv, logdir, policy)
-    mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
+    if continue_type == "train":
+        expert_trainer.train(n_epochs = n_epochs)
+    elif continue_type == "learn":
+        learner = load_learner(env_name, wenv, logdir, policy)
+        mean_rew, per_expert, std_err = evaluate(env, learner, target_rewards, phase="reinforcement", log=True)
 
     learner.learn(total_timesteps=learner_timesteps, callback=RewardLoggerCallback())
     torch.save({'model_state_dict': learner.policy.state_dict()},
@@ -76,4 +78,4 @@ if __name__ == "__main__":
     model_dir = "logs/train/seals:seals/CartPole-v0/2025-03-27__11-43-05__seed_532"
     model_dir = "logs/train/seals:seals/CartPole-v0/2025-03-27__11-12-43__seed_0"
     tags = ["Continue learning"]
-    main(model_dir, run_from="SUP", tags=tags, learner_timesteps=1000_000)
+    main(model_dir, run_from="SUP", tags=tags, learner_timesteps=1000_000, continue_type="train")

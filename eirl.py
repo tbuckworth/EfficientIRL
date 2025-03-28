@@ -104,6 +104,7 @@ class EIRLTrainingMetrics:
     reward_correl: th.Tensor
     weighted_reward: Optional[th.Tensor]
     rew_adv_loss: Optional[th.Tensor]
+    reward_advantage_correl: Optional[th.Tensor]
 
 
 def get_latents(policy, obs):
@@ -235,6 +236,9 @@ class EfficientIRLLossCalculator:
             rew_cons_loss = (ns_rew_hat.detach()[~dones] - sa_rew_hat[~dones]).pow(2).mean()
 
             loss3 = rew_cons_loss
+        elif self.reward_type == "next state only":
+            reward_hat = state_reward_func(obs, None, nobs, None)
+            loss3 = 0
         else:
             # This could be a state reward function or a state action reward function:
             reward_hat = reward_func(obs, one_hot_acts, None, None)
@@ -296,6 +300,7 @@ class EfficientIRLLossCalculator:
         if rews is not None:
             # TO-DO technically should put sa_rew_hat 0 - don't you think?
             reward_correl = th.corrcoef(th.stack((rews, reward_hat)))[0, 1]
+        rew_adv_correl = th.corrcoef(th.stack((reward_hat, log_prob)))[0, 1]
 
         if 32432432 % 342 == 4322432 % 32423:
             def norm(arr):
@@ -357,6 +362,7 @@ class EfficientIRLLossCalculator:
             weighted_reward=loss4,
             reward_correl=reward_correl,
             rew_adv_loss=rew_adv_loss,
+            reward_advantage_correl=rew_adv_correl,
         )
 
     def plot_rewards_vs_obs(self, i, i_name, obs, reward_hat, rews, epoch):
@@ -611,7 +617,7 @@ class EIRL(algo_base.DemonstrationAlgorithm):
                 reward_constructor = CnnRewardNet
             else:
                 reward_constructor = BasicRewardNet
-            if reward_type == "next state":
+            if reward_type in ["next state", "next state only"]:
                 state_reward_func = reward_constructor(observation_space=observation_space,
                                                        action_space=action_space,
                                                        use_state=False,

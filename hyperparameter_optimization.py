@@ -242,7 +242,7 @@ def search_meow():
         algo="imeow",
         seed=[0, 42, 100, 532, 3432],
         # hard=[False, True],
-        reward_type=["next state", "state", "state-action"],
+        reward_type=["next state", "state", "state-action", "next state only"],
         log_prob_adj_reward=False,
         neg_reward=False,
         maximize_reward=False,
