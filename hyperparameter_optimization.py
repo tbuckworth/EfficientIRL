@@ -201,7 +201,7 @@ def search_eirl():
         rew_const=False,
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["hp3", "rewards in optimizer", "next state only test"],
+        extra_tags=["next state only test"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         # overrides={"gravity": 15.0},
@@ -292,4 +292,4 @@ def search_meow():
 
 
 if __name__ == "__main__":
-    search_meow()
+    search_eirl()
