@@ -95,18 +95,15 @@ class EIRLTrainingMetrics:
     kl_loss: th.Tensor
     entropy: Optional[th.Tensor]
     reward_loss: Optional[th.Tensor]
-    log_prob_rew_loss: Optional[th.Tensor]
     consistency_loss: th.Tensor
     prob_true_act: th.Tensor
     l2_norm: th.Tensor
     l2_loss: th.Tensor
     loss: th.Tensor
     reward_correl: th.Tensor
-    weighted_reward: Optional[th.Tensor]
     rew_adv_loss: Optional[th.Tensor]
     reward_advantage_correl: Optional[th.Tensor]
     advantage_consistency_loss: Optional[th.Tensor]
-
 
 def get_latents(policy, obs):
     features = BasePolicy.extract_features(policy, obs, policy.pi_features_extractor)
