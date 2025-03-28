@@ -193,7 +193,7 @@ def search_eirl():
     fixed = dict(
         algo="eirl2",
         seed=[0, 42, 100, 532, 3432],
-        hard=False,
+        hard=True,
         reward_type=["next state", "state", "state-action", "next state only"],
         log_prob_adj_reward=False,
         neg_reward=False,
