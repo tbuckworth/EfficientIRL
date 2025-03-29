@@ -9,6 +9,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
 import eirl2
+import gflow
 from CustomEnvMonitor import CartpoleVecEnvActionFlipWrapper
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
@@ -240,10 +241,11 @@ if __name__ == "__main__":
     # model_file = get_latest_model("logs/train/seals:seals/Hopper-v1/2025-03-21__10-24-57__seed_0", "SUP")
     for seed in [100, 0, 123, 412, 40, 32, 332, 32]:
         trainEIRL(
-            algo="eirl",
+            algo="gflow",
             seed=seed,
             consistency_coef=50,
-            n_expert_demos=5,
+            n_expert_demos=2,
+            n_eval_episodes=1,
             gamma=0.98,
             hard=True,
             norm_reward=True,

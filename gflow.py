@@ -1,4 +1,5 @@
 import torch
+from imitation.algorithms import base
 from imitation.rewards.reward_nets import BasicShapedRewardNet, BasicRewardNet, ShapedRewardNet
 from jinja2 import optimizer
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -55,10 +56,16 @@ class GFLOW:
                                           list(self.reward_function.parameters()) +
                                           [self.Z_param],
                                           lr=lr)
+        self.data = torch.utils.data.DataLoader(
+            demonstrations,
+            batch_size=batch_size,
+            # collate_fn=types.transitions_collate_fn,
+
+        )
 
     def train(self, n_epochs):
         for epoch in range(n_epochs):
-            for traj in self.demonstrations:
+            for traj in self.data:
                 loss = self.trajectory_balance_loss(traj)
                 loss.backward()
                 self.optimizer.step()
@@ -67,5 +74,10 @@ class GFLOW:
     def trajectory_balance_loss(self, traj):
         pass
 
-
+    # def set_demonstrations(self, demonstrations: base.AnyTransitions) -> None:
+    #     self._demo_data_loader = base.make_data_loader(
+    #         demonstrations,
+    #         self.demo_batch_size,
+    #     )
+    #     self._endless_expert_iterator = util.endless_iter(self._demo_data_loader)
 
