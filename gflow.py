@@ -47,13 +47,13 @@ class GFLOW:
             use_action,
             use_next_state
         )
-        self.reward_function = ShapedRewardNet(self.output_reward_function,
-                                               value_func,
-                                               gamma)
+        self.reward_net = ShapedRewardNet(self.output_reward_function,
+                                          value_func,
+                                          gamma)
         self.optimizer = torch.optim.Adam(list(self.forward_policy.parameters()) +
                                           list(self.backward_policy.parameters()) +
                                           list(self.output_reward_function.parameters()) +
-                                          list(self.reward_function.parameters()) +
+                                          list(self.reward_net.parameters()) +
                                           [self.Z_param],
                                           lr=lr)
         self.data = torch.utils.data.DataLoader(
@@ -79,10 +79,25 @@ class GFLOW:
         terminal = traj.terminal
         true_rews = traj.rews
 
-    # def set_demonstrations(self, demonstrations: base.AnyTransitions) -> None:
-    #     self._demo_data_loader = base.make_data_loader(
-    #         demonstrations,
-    #         self.demo_batch_size,
-    #     )
-    #     self._endless_expert_iterator = util.endless_iter(self._demo_data_loader)
+        probs = self.forward_policy(obs)  # [:-1] might be more informative - wouldn't change anything
+        log_forwards = torch.log(probs[[i for i in range(len(acts))], acts])
+
+        # For backward, assume a fixed reverse mapping (e.g. up <-> down, right <-> left)
+        backward_action_map = {0: 2, 1: 3, 2: 0, 3: 1}
+        # is this necessary?
+
+        fwd_action = acts
+        back_action = [backward_action_map[k] for k in fwd_action]
+        probs = self.backward_policy(obs[1:])
+        log_backwards = torch.log(probs[[i for i in range(len(probs))], back_action])
+
+        log_Z = torch.log(self.Z_param + 1e-8)
+
+        rewards = self.reward_net(obs).squeeze()
+
+        log_forward = log_forwards.cumsum(dim=0)
+        log_backward = log_backwards.cumsum(dim=0)
+        reward = rewards[0] + rewards[1:].cumsum(dim=0)
+        loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
+        return loss
 
