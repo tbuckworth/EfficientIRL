@@ -19,11 +19,14 @@ except ImportError:
 def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
                           opt_metric="summary.original_ep_return_mean",
                           entity="ic-ai-safety"):
+    if not isinstance(id_tag, list):
+        id_tag = [id_tag]
     wandb_login()
     api = wandb.Api()
     entity, project = entity, project
     runs = api.runs(entity + "/" + project,
-                    filters={"$and": [{"tags": id_tag, "state": "finished"}]}
+                    # filters={"$and": [{"tags": id_tag, "state": "finished"}]}
+                    filters={"$and": [{"tags": {"$in": id_tag}}, {"state": "finished"}]}
                     )
 
     summary_list, config_list, name_list, state_list = [], [], [], []
@@ -119,14 +122,34 @@ def run_next_hyperparameters(hparams):
     filtered_params = filter_params(hparams, trainEIRL)
     trainEIRL(**filtered_params)
 
+
 def run_next_hyperparameters_imeow(hparams):
     from train_IMEow import trainIMEow
     filtered_params = filter_params(hparams, trainIMEow)
     trainIMEow(**filtered_params)
 
+
 def get_project(env_name, exp_name):
     # TODO: make this real
     return "EfficientIRL"
+
+
+def tree_analyze_hparams(bounds,
+                         id_tag,
+                         project="EfficientIRL",
+                         opt_metric="summary.original_ep_return_mean"
+                         ):
+    from sklearn.tree import DecisionTreeRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.tree import export_text
+    X, y = get_wandb_performance(bounds.keys(), project, id_tag, opt_metric)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    tree = DecisionTreeRegressor(max_depth=4)
+    tree.fit(X_train, y_train)
+    print(export_text(tree, feature_names=list(X.columns)))
+    print("done")
+
 
 
 def optimize_hyperparams(bounds,
@@ -186,7 +209,8 @@ def run_forever(bounds, fixed, run_func, opt_metric, abs=False, debug=False):
     id_tag = fixed["extra_tags"][0]
     fixed["original_start"] = time.asctime()
     while True:
-        optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs, debug=debug)
+        optimize_hyperparams(bounds, fixed, project, id_tag, run_func, opt_metric, greater_is_better=True, abs=abs,
+                             debug=debug)
 
 
 def search_eirl():
@@ -218,11 +242,11 @@ def search_eirl():
         # [128, 128, 128, 128],
         # [64, 128, 256, 64]],
         consistency_coef=30.,
-        n_envs = 16,
-        n_epochs = 100,
-        n_expert_demos = 10,
-        lr = 0.0005,
-        l2_weight = 0.001,
+        n_envs=16,
+        n_epochs=100,
+        n_expert_demos=10,
+        lr=0.0005,
+        l2_weight=0.001,
         flip_cartpole_actions=True,
     )
     bounds = dict(
@@ -242,7 +266,13 @@ def search_eirl():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
+    tree_analyze_hparams(bounds,
+                         id_tag="hp3",
+                         project="EfficientIRL",
+                         opt_metric="summary.original_ep_return_mean"
+                         )
+    # run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
+
 
 def search_meow():
     fixed = dict(
@@ -253,7 +283,7 @@ def search_meow():
         log_prob_adj_reward=False,
         neg_reward=False,
         maximize_reward=False,
-        rew_const=False,#[True, False],
+        rew_const=False,  # [True, False],
         training_increments=5,
         # n_expert_demos=10,
         extra_tags=["hp5", "meow"],
@@ -279,7 +309,7 @@ def search_meow():
         # neg_reward=False,
         # maximize_reward=False,
         n_expert_demos=[1, 60],
-        n_envs = [2, 32],
+        n_envs=[2, 32],
         # learner_timesteps=[100_000, 3000_000],
         # gamma=[0.98],#[0.8, 0.999],
         # training_increments=[5, 10],

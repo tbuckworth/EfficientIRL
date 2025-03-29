@@ -1,4 +1,6 @@
+import torch
 from imitation.rewards.reward_nets import BasicShapedRewardNet, BasicRewardNet, ShapedRewardNet
+from jinja2 import optimizer
 from stable_baselines3.common.policies import ActorCriticPolicy
 
 from helper_local import get_policy_for
@@ -11,6 +13,7 @@ class GFLOW:
                  demonstrations,
                  gamma=0.98,
                  batch_size=256,
+                 lr=1e-3,
                  l2_weight=0.001,
                  rng=None,
                  custom_logger=None,
@@ -30,6 +33,7 @@ class GFLOW:
         self.rng = rng
         self.custom_logger = custom_logger
 
+        self.Z_param = torch.nn.Parameter(torch.tensor(1.0))
         self.forward_policy = get_policy_for(observation_space, action_space, net_arch)
         self.backward_policy = get_policy_for(observation_space, action_space, net_arch)
 
@@ -45,3 +49,23 @@ class GFLOW:
         self.reward_function = ShapedRewardNet(self.output_reward_function,
                                                value_func,
                                                gamma)
+        self.optimizer = torch.optim.Adam(list(self.forward_policy.parameters()) +
+                                          list(self.backward_policy.parameters()) +
+                                          list(self.output_reward_function.parameters()) +
+                                          list(self.reward_function.parameters()) +
+                                          [self.Z_param],
+                                          lr=lr)
+
+    def train(self, n_epochs):
+        for epoch in range(n_epochs):
+            for traj in self.demonstrations:
+                loss = self.trajectory_balance_loss(traj)
+                loss.backward()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+
+    def trajectory_balance_loss(self, traj):
+        pass
+
+
+
