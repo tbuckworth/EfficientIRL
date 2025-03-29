@@ -65,14 +65,19 @@ class GFLOW:
 
     def train(self, n_epochs):
         for epoch in range(n_epochs):
-            for traj in self.data:
+            # maybe shuffle?
+            for traj in self.demonstrations:
                 loss = self.trajectory_balance_loss(traj)
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
     def trajectory_balance_loss(self, traj):
-        pass
+        obs = traj.obs
+        acts = traj.acts
+        infos = traj.infos
+        terminal = traj.terminal
+        true_rews = traj.rews
 
     # def set_demonstrations(self, demonstrations: base.AnyTransitions) -> None:
     #     self._demo_data_loader = base.make_data_loader(
