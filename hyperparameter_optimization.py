@@ -326,7 +326,7 @@ def search_gflow():
     fixed = dict(
         algo="gflow",
         seed=[0, 42, 100, 532, 3432],
-        hard=True,
+        hard=[True, False],
         reward_type="state-action",#["next state", "state", "state-action", "next state only"],
         training_increments=5,
         extra_tags=["gflow0"],
@@ -336,23 +336,23 @@ def search_gflow():
         batch_size=256,
         # norm_reward=[False, True],
         net_arch=[[256, 256, 256, 256]],
-        learner_timesteps=250_000,
+        learner_timesteps=0,
         n_envs=16,
-        n_epochs=100,
-        n_expert_demos=10,
-        lr=0.0005,
         flip_cartpole_actions=True,
-        use_returns=True,
-        use_z=True,
-        log_prob_loss="kl",#["kl", "chi_square", "abs"],
-        target_log_probs=False,
+        use_returns=[True, False],
+        use_z=[True, False],
+        log_prob_loss=["kl", "chi_square", "abs", None],
+        target_log_probs=[False, True],
         kl_coef=1.,
     )
     bounds = dict(
+        n_expert_demos=[1, 60],
+        learner_timesteps=[100_000, 1000_000],
+        n_epochs=[100, 1000],
         val_coef=[0.1, 2.],
         lr=[0.00015, 0.003],
     )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.gflow/reward_correl", debug=True)
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean", debug=False)
 
 
 if __name__ == "__main__":
