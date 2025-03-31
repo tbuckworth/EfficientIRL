@@ -71,6 +71,12 @@ def trainEIRL(algo="eirl",
               rew_const=False,
               disc_coef=0.,
               flip_cartpole_actions=False,
+              val_coef=1.,
+              use_returns=True,
+              use_z=True,
+              kl_coef=1.,
+              log_prob_loss=None,
+              target_log_probs=False,
               ):
     if flip_cartpole_actions and not re.search("CartPole", env_name):
         raise Exception(f"flip_cartpole_actions only works for CartPole envs")
@@ -143,6 +149,15 @@ def trainEIRL(algo="eirl",
             l2_weight=l2_weight,
             rng=default_rng,
             custom_logger=custom_logger,
+            net_arch=net_arch,
+            reward_type=reward_type,
+            val_coef=val_coef,
+            hard=hard,
+            use_returns=use_returns,
+            use_z=use_z,
+            kl_coef=kl_coef,
+            log_prob_loss=log_prob_loss,
+            target_log_probs=target_log_probs,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")

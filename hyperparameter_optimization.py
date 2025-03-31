@@ -321,6 +321,38 @@ def search_meow():
     )
     run_forever(bounds, fixed, run_next_hyperparameters_imeow, opt_metric="summary.IMEow/reward_correl", debug=True)
 
+def search_gflow():
+    fixed = dict(
+        algo="gflow",
+        seed=[0, 42, 100, 532, 3432],
+        hard=True,
+        reward_type="state-action",#["next state", "state", "state-action", "next state only"],
+        training_increments=5,
+        extra_tags=["gflow0"],
+        early_learning=False,
+        env_name="seals:seals/CartPole-v0",
+        gamma=0.98,
+        batch_size=256,
+        # norm_reward=[False, True],
+        net_arch=[[256, 256, 256, 256]],
+        learner_timesteps=250_000,
+        n_envs=16,
+        n_epochs=100,
+        n_expert_demos=10,
+        lr=0.0005,
+        flip_cartpole_actions=True,
+        use_returns=True,
+        use_z=True,
+        log_prob_loss=None,
+        target_log_probs=False,
+        kl_coef=1.,
+    )
+    bounds = dict(
+        val_coef=[0.1, 2.],
+        lr=[0.00015, 0.003],
+    )
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.gflow/reward_correl", debug=True)
+
 
 if __name__ == "__main__":
-    search_eirl()
+    search_gflow()

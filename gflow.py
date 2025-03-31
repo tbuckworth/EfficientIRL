@@ -1,4 +1,5 @@
 import numpy as np
+import gymnasium as gym
 import torch
 from imitation.algorithms import base
 from imitation.rewards.reward_nets import BasicShapedRewardNet, BasicRewardNet, ShapedRewardNet
@@ -48,9 +49,7 @@ class GFLOW:
                  rng=None,
                  custom_logger=None,
                  net_arch=None,
-                 use_state=True,
-                 use_action=False,
-                 use_next_state=False,
+                 reward_type="state-action",
                  device=None,
                  val_coef=1.,
                  hard=True,
@@ -60,6 +59,7 @@ class GFLOW:
                  log_prob_loss=None,
                  target_log_probs=False
                  ):
+        self.reward_type = reward_type
         self.target_log_probs = target_log_probs
         self.log_prob_loss = log_prob_loss
         self.kl_coef = kl_coef
@@ -85,6 +85,14 @@ class GFLOW:
         self.backward_policy = get_policy_for(observation_space, action_space, net_arch)
 
         value_func = lambda obs: self.forward_policy.predict_values(obs).squeeze()
+
+        use_state = use_action = use_next_state = False
+        if reward_type == "state-action":
+            use_state = use_action = True
+        if reward_type == "state":
+            use_state = True
+        if reward_type in ["next state", "next state only"]:
+            use_next_state = True
 
         self.output_reward_function = BasicRewardNet(
             observation_space,
@@ -150,7 +158,8 @@ class GFLOW:
         values, log_forwards, entropy = self.forward_policy.evaluate_actions(obs[..., :-1,:], acts)
         _, log_backwards, _ = self.backward_policy.evaluate_actions(obs[..., 1:, :], acts)
         log_Z = torch.log(self.Z_param + 1e-8) if self.use_z else 0
-        rewards, dis_rewards = self.reward_net.forward_trajectory(obs, acts, done, values)
+        rew_acts = self.maybe_one_hot(acts)
+        rewards, dis_rewards = self.reward_net.forward_trajectory(obs, rew_acts, done, values)
 
         # Reward - Value loss:
         discounts = torch.full_like(rewards, self.gamma)
@@ -192,6 +201,11 @@ class GFLOW:
             "gflow/loss": loss.item()
         }
         return loss, stats
+
+    def maybe_one_hot(self, acts):
+        if isinstance(self.action_space, gym.spaces.Discrete):
+            return torch.nn.functional.one_hot(acts, self.action_space.n).to(device=self.policy.device)
+        return acts
 
     def log(self, losses):
         for k, v in losses.items():
