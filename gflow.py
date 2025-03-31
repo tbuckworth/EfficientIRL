@@ -59,6 +59,7 @@ class GFLOW:
                  log_prob_loss=None,
                  target_log_probs=False
                  ):
+        self.stats = {}
         self.reward_type = reward_type
         self.target_log_probs = target_log_probs
         self.log_prob_loss = log_prob_loss
@@ -144,7 +145,8 @@ class GFLOW:
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-                self.log(stats)
+                self.accum_stats(stats)
+            self.log(epoch)
 
     def trajectory_balance_loss(self, traj):
         obs = torch.FloatTensor(traj.obs).to(device=self.device)
@@ -212,9 +214,17 @@ class GFLOW:
             return torch.nn.functional.one_hot(acts.to(torch.int64), self.action_space.n).to(device=self.policy.device)
         return acts
 
-    def log(self, losses):
-        for k, v in losses.items():
-            self.custom_logger.record(k, v)
+    def accum_stats(self, stats):
+        if self.stats == {}:
+            self.stats = {k:[v] for k, v in stats.items()}
+        else:
+            [self.stats[k].append(v) for k, v in stats.items()]
+
+    def log(self, epoch):
+        for k, v in self.stats.items():
+            self.custom_logger.record(k, np.mean(v))
+        self.custom_logger.dump(epoch)
+        self.stats = {}
 
     def get_correl(self, a, b):
         # not set up for batch dims.
