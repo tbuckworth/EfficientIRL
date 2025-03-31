@@ -119,7 +119,7 @@ class GFLOW:
         if self.log_prob_loss == "kl":
             self.maybe_optimize_log_probs = lambda lf: -lf.mean()
         elif self.log_prob_loss == "chi_square":
-            self.maybe_optimize_log_probs = lambda lf: -(lf-(2*lf.pow())).mean()
+            self.maybe_optimize_log_probs = lambda lf: -(lf-(2*lf.pow(2))).mean()
         elif self.log_prob_loss is None:
             if self.target_log_probs:
                 raise Exception("forward policy won't learn if log_prob_loss is None and target_log_probs is True")
