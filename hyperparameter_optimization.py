@@ -143,6 +143,7 @@ def tree_analyze_hparams(bounds,
     from sklearn.tree import DecisionTreeRegressor
     from sklearn.model_selection import train_test_split
     from sklearn.tree import export_text
+
     X, y = get_wandb_performance(bounds.keys(), project, id_tag, opt_metric)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
@@ -267,6 +268,7 @@ def search_eirl():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
+    bounds.update(fixed)
     tree_analyze_hparams(bounds,
                          id_tag="hp3",
                          project="EfficientIRL",
@@ -356,4 +358,4 @@ def search_gflow():
 
 
 if __name__ == "__main__":
-    search_gflow()
+    search_eirl()
