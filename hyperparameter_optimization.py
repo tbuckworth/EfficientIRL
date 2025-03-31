@@ -56,7 +56,7 @@ def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
     except KeyError:
         return None, None
 
-    flt = pd.notna(y)
+    flt = np.bitwise_and(pd.notna(y), y != 'NaN')
     df = df[flt]
     y = y[flt]
     if len(df) == 0:
@@ -102,7 +102,8 @@ def select_next_hyperparameters(X, y, bounds, greater_is_better=True):
         bs = np.array_split(bound_array[idx], n_splits, axis=0)
 
         for x, b in zip(xs, bs):
-            param = bayesian_optimisation(x, yp, b, random_search=True, greater_is_better=greater_is_better)
+            # Change to random search if problem
+            param = bayesian_optimisation(x, yp, b, random_search=False, greater_is_better=greater_is_better)
             params += list(param)
 
         next_params = np.array(params)[np.argsort(idx)]
@@ -343,7 +344,7 @@ def search_gflow():
         flip_cartpole_actions=True,
         use_returns=True,
         use_z=True,
-        log_prob_loss=None,
+        log_prob_loss="kl",#["kl", "chi_square", "abs"],
         target_log_probs=False,
         kl_coef=1.,
     )
