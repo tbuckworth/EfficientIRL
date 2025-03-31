@@ -52,7 +52,20 @@ class GFLOW:
                  use_action=False,
                  use_next_state=False,
                  device=None,
-                 val_coef=1.):
+                 val_coef=1.,
+                 hard=True,
+                 use_returns=True,
+                 use_z=True,
+                 kl_coef=1.,
+                 log_prob_loss=None,
+                 target_log_probs=False
+                 ):
+        self.target_log_probs = target_log_probs
+        self.log_prob_loss = log_prob_loss
+        self.kl_coef = kl_coef
+        self.use_z = use_z
+        self.use_returns = use_returns
+        self.hard = hard
         self.val_coef = val_coef
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         if net_arch is None:
@@ -63,7 +76,8 @@ class GFLOW:
         self.gamma = gamma
         self.batch_size = batch_size
         self.l2_weight = l2_weight
-        self.rng = rng
+        # default seed if rng is not supplied
+        self.rng = rng or np.random.default_rng(0)
         self.custom_logger = custom_logger
 
         self.Z_param = torch.nn.Parameter(torch.tensor(1.0))
@@ -91,12 +105,19 @@ class GFLOW:
                                           list(self.reward_net.parameters()) +
                                           [self.Z_param],
                                           lr=lr)
-        # self.data = torch.utils.data.DataLoader(
-        #     demonstrations,
-        #     batch_size=batch_size,
-        #     # collate_fn=types.transitions_collate_fn,
-        #
-        # )
+
+        if self.log_prob_loss == "kl":
+            self.maybe_optimize_log_probs = lambda lf: -lf.mean()
+        elif self.log_prob_loss == "chi_square":
+            self.maybe_optimize_log_probs = lambda lf: -(lf-(2*lf.pow())).mean()
+        elif self.log_prob_loss is None:
+            if self.target_log_probs:
+                raise Exception("forward policy won't learn if log_prob_loss is None and target_log_probs is True")
+            self.maybe_optimize_log_probs = lambda lf: 0
+        elif self.log_prob_loss == "abs":
+            self.maybe_optimize_log_probs = lambda lf: lf.abs().mean()
+        else:
+            raise NotImplementedError(f"{self.log_prob_loss} is not a valid log_prob_loss")
 
     @property
     def policy(self) -> ActorCriticPolicy:
@@ -109,8 +130,7 @@ class GFLOW:
     def train(self, n_epochs, progress_bar=None):
         for epoch in range(n_epochs):
             self.custom_logger.record("epoch", epoch)
-            # maybe shuffle?
-            for traj in self.demonstrations:
+            for traj in self.rng.permutation(self.demonstrations):
                 loss, stats = self.trajectory_balance_loss(traj)
                 loss.backward()
                 self.optimizer.step()
@@ -126,15 +146,10 @@ class GFLOW:
         done[-1] = 1 if traj.terminal else 0
         true_rews = traj.rews
 
-        # This is just so we can get values for all observations, the added act is not used
-        # The other option is to filter out last obs here and then manually calculate and append the
-        # modified_acts = torch.cat((acts,acts[..., -1:]),dim=-1)
+        # obs has one extra observation (terminal)
         values, log_forwards, entropy = self.forward_policy.evaluate_actions(obs[..., :-1,:], acts)
-
         _, log_backwards, _ = self.backward_policy.evaluate_actions(obs[..., 1:, :], acts)
-
-        log_Z = torch.log(self.Z_param + 1e-8)
-
+        log_Z = torch.log(self.Z_param + 1e-8) if self.use_z else 0
         rewards, dis_rewards = self.reward_net.forward_trajectory(obs, acts, done, values)
 
         # Reward - Value loss:
@@ -142,28 +157,36 @@ class GFLOW:
         discounts[..., 0] = 1
         discounts = discounts.cumprod(dim=-1)
 
-        disc_rew = discounts * rewards
+        disc_rew = discounts * (rewards + entropy.squeeze() if not self.hard else 0)
         disc_val = discounts * values.squeeze()
 
-        # TODO: if max_ent then should we include entropy?
         val_target = disc_rew.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
-        value_loss = (disc_val - val_target).pow(2).mean()
+        value_loss = ((disc_val - val_target)/discounts).pow(2).mean()
+
+        kl_loss = self.maybe_optimize_log_probs(log_forwards)
 
         # Balance Loss:
+        if self.target_log_probs:
+            log_forwards = log_forwards.detach()
+
         log_forward = log_forwards.cumsum(dim=-1)
         log_backward = log_backwards.cumsum(dim=-1)
-        reward = rewards.cumsum(dim=-1)
+        if self.use_returns:
+            reward = disc_rew.cumsum(dim=-1)
+        else:
+            reward = rewards.cumsum(dim=-1)
         # would returns make more sense?
         balance_loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
 
         # Total Loss:
-        loss = balance_loss + value_loss * self.val_coef
+        loss = balance_loss + value_loss * self.val_coef + kl_loss * self.kl_coef
 
         reward_advantage_correl = self.get_correl(rewards, true_rews)
         reward_correl = self.get_correl(dis_rewards, true_rews)
         stats = {
             "gflow/balance_loss": balance_loss.item(),
             "gflow/value_loss": value_loss.item(),
+            "gflow/kl_loss": kl_loss.item(),
             "gflow/reward_correl": reward_correl,
             "gflow/reward_advantage_correl": reward_advantage_correl,
             "gflow/loss": loss.item()
@@ -185,4 +208,6 @@ class GFLOW:
             return np.nan
         assert(len(a) == len(b))
         return np.corrcoef(a, b)[0,1]
+
+
 
