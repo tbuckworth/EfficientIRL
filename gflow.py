@@ -23,7 +23,7 @@ class CustomShapedRewardNet(ShapedRewardNet):
                 - value.squeeze()
         )
         assert final_rew.shape == state.shape[:1]
-        return final_rew, base_reward_net_output
+        return final_rew.squeeze(), base_reward_net_output.squeeze()
 
     def forward_trajectory(self, state, action, done, value=None):
         next_value = None
@@ -98,8 +98,17 @@ class GFLOW:
         #
         # )
 
+    @property
+    def policy(self) -> ActorCriticPolicy:
+        return self.forward_policy
+
+    @property
+    def reward_func(self) -> BasicRewardNet:
+        return self.output_reward_function
+
     def train(self, n_epochs, progress_bar=None):
         for epoch in range(n_epochs):
+            self.custom_logger.record("epoch", epoch)
             # maybe shuffle?
             for traj in self.demonstrations:
                 loss, stats = self.trajectory_balance_loss(traj)
@@ -126,7 +135,7 @@ class GFLOW:
 
         log_Z = torch.log(self.Z_param + 1e-8)
 
-        rewards, dis_rewards = self.reward_net.forward_trajectory(obs, acts, done, values).squeeze()
+        rewards, dis_rewards = self.reward_net.forward_trajectory(obs, acts, done, values)
 
         # Reward - Value loss:
         discounts = torch.full_like(rewards, self.gamma)
@@ -162,16 +171,18 @@ class GFLOW:
         return loss, stats
 
     def log(self, losses):
-        # Customize if necessary
-        self.custom_logger.log(losses)
+        for k, v in losses.items():
+            self.custom_logger.record(k, v)
 
     def get_correl(self, a, b):
+        # not set up for batch dims.
         #flatten?
         if not isinstance(a, np.ndarray):
             a = a.squeeze().detach().cpu().numpy()
         if not isinstance(b, np.ndarray):
             b = b.squeeze().detach().cpu().numpy()
+        if b.std()==0:
+            return np.nan
         assert(len(a) == len(b))
-        #TODO: suppress warning?
         return np.corrcoef(a, b)[0,1]
 
