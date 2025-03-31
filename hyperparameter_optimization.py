@@ -336,7 +336,7 @@ def search_gflow():
         batch_size=256,
         # norm_reward=[False, True],
         net_arch=[[256, 256, 256, 256]],
-        learner_timesteps=0,
+        # learner_timesteps=0,
         n_envs=16,
         flip_cartpole_actions=True,
         use_returns=[True, False],
