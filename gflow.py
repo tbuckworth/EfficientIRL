@@ -222,7 +222,8 @@ class GFLOW:
 
     def log(self, epoch):
         for k, v in self.stats.items():
-            self.custom_logger.record(k, np.mean(v))
+            mean_v = np.mean(np.array(v)[~np.isnan(v)])
+            self.custom_logger.record(k, mean_v)
         self.custom_logger.dump(epoch)
         self.stats = {}
 

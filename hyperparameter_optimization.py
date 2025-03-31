@@ -336,7 +336,7 @@ def search_gflow():
         batch_size=256,
         # norm_reward=[False, True],
         net_arch=[[256, 256, 256, 256]],
-        # learner_timesteps=0,
+        learner_timesteps=0,
         n_envs=16,
         flip_cartpole_actions=True,
         use_returns=[True, False],
@@ -352,7 +352,7 @@ def search_gflow():
         val_coef=[0.1, 2.],
         lr=[0.00015, 0.003],
     )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.original_ep_return_mean", debug=False)
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.gflow/reward_correl", debug=False)
 
 
 if __name__ == "__main__":
