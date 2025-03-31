@@ -72,6 +72,7 @@ class GFLOW:
             net_arch = [256, 256, 256, 256]
         self.observation_space = observation_space
         self.action_space = action_space
+        self.one_hot = isinstance(self.action_space, gym.spaces.Discrete)
         self.demonstrations = demonstrations
         self.gamma = gamma
         self.batch_size = batch_size
@@ -192,10 +193,14 @@ class GFLOW:
 
         reward_advantage_correl = self.get_correl(rewards, true_rews)
         reward_correl = self.get_correl(dis_rewards, true_rews)
+        if isinstance(kl_loss, int):
+            kl = np.nan
+        else:
+            kl = kl_loss.item()
         stats = {
             "gflow/balance_loss": balance_loss.item(),
             "gflow/value_loss": value_loss.item(),
-            "gflow/kl_loss": kl_loss.item(),
+            "gflow/kl_loss": kl,
             "gflow/reward_correl": reward_correl,
             "gflow/reward_advantage_correl": reward_advantage_correl,
             "gflow/loss": loss.item()
@@ -203,8 +208,8 @@ class GFLOW:
         return loss, stats
 
     def maybe_one_hot(self, acts):
-        if isinstance(self.action_space, gym.spaces.Discrete):
-            return torch.nn.functional.one_hot(acts, self.action_space.n).to(device=self.policy.device)
+        if self.one_hot:
+            return torch.nn.functional.one_hot(acts.to(torch.int64), self.action_space.n).to(device=self.policy.device)
         return acts
 
     def log(self, losses):
