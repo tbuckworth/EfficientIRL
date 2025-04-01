@@ -80,7 +80,7 @@ def sample_next_hyperparameter(acquisition_func, gaussian_process, evaluated_los
     for starting_point in np.random.uniform(bounds[:, 0], bounds[:, 1], size=(n_restarts, n_params)):
 
         res = minimize(fun=acquisition_func,
-                       x0=starting_point.reshape(1, -1),
+                       x0=starting_point,#.reshape(1, -1),
                        bounds=bounds,
                        method='L-BFGS-B',
                        args=(gaussian_process, evaluated_loss, greater_is_better, n_params))
