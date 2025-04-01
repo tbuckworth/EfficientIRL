@@ -187,7 +187,6 @@ class GFLOW:
             reward = disc_rew.cumsum(dim=-1)
         else:
             reward = rewards.cumsum(dim=-1)
-        # would returns make more sense?
         balance_loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
 
         # Total Loss:

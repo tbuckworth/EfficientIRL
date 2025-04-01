@@ -187,7 +187,7 @@ def tree_analyze_hparams(id_tag,
     X, y = get_wandb_performance(None, project, id_tag, opt_metric)
 
 
-    X_clean = format_df_to_numbers(X)
+    X_clean = format_df_to_numbers(X, remove=["config.seed"])
     flt = np.bitwise_and(
         y["summary.reward/original_ep_return_mean"] > 350,
         y["summary.eirl/reward_correl"] > 0.5
@@ -225,7 +225,9 @@ def tree_analyze_hparams(id_tag,
 
     print("done")
 
-def format_df_to_numbers(X):
+def format_df_to_numbers(X, remove=None):
+    if remove is None:
+        remove = []
     df = X.copy()
 
     # Convert bool columns to int
@@ -242,7 +244,8 @@ def format_df_to_numbers(X):
     numerics = X.select_dtypes(include=['float','int','bool'])
 
     df = pd.concat((numerics, one_hots),axis=1)
-    return df
+    columns = [col for col in df.columns if col not in remove]
+    return df[columns]
 
 def optimize_hyperparams(bounds,
                          fixed,
@@ -359,7 +362,7 @@ def search_eirl():
         # enforce_rew_val_consistency=False,
     )
     bounds.update(fixed)
-    tree_analyze_hparams(id_tag="hp3",
+    tree_analyze_hparams(id_tag=["disentanglement test", "disentanglement test2"],
                          project="EfficientIRL",
                          )
     # run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
@@ -446,4 +449,4 @@ def search_gflow():
 
 
 if __name__ == "__main__":
-    search_gflow()
+    search_eirl()
