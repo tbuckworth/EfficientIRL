@@ -5,6 +5,7 @@ from math import floor, log10
 
 import numpy as np
 import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
 
 from gp import bayesian_optimisation
 from helper_local import filter_params
@@ -56,7 +57,13 @@ def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
     except KeyError:
         return None, None
 
-    flt = np.bitwise_and(pd.notna(y), y != 'NaN')
+    if y.ndim==2:
+        flt = np.bitwise_and(pd.notna(y).all(axis=1), (y != 'NaN').all(axis=1))
+    elif y.ndim==1:
+        flt = np.bitwise_and(pd.notna(y), (y != 'NaN'))
+    else:
+        raise NotImplementedError("ndim should be max 2")
+
     df = df[flt]
     y = y[flt]
     if len(df) == 0:
@@ -65,6 +72,9 @@ def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
     # hp = [h for h in hp if h not in ["config.extra_tags"]]
     # hp = [h for h in hp if len(df[h].unique()) > 1]
 
+    if hparams is None:
+        hp = [column for column in df.columns if re.search(fr"config\.",column)]
+        return df[hp], y
     hp = [f"config.{h}" for h in hparams if f"config.{h}" in df.columns]
     dfn = df[hp].select_dtypes(include='number')
     return dfn, y
@@ -135,24 +145,104 @@ def get_project(env_name, exp_name):
     return "EfficientIRL"
 
 
-def tree_analyze_hparams(bounds,
-                         id_tag,
+from sklearn.tree import _tree
+
+
+def extract_rules(X, flt, tree, feature_names):
+    tree_ = tree.tree_
+
+    def recurse(X, flt, node, current_rule):
+        # Not a leaf node.
+        if tree_.feature[node] != _tree.TREE_UNDEFINED:
+            name = feature_names[tree_.feature[node]]
+            threshold = tree_.threshold[node]
+            f = X[name] <= threshold
+            if flt[f].mean() > 0.5:
+                current_rule += [(name, "<=", threshold)]
+                recurse(X, flt, tree_.children_left[node], current_rule)
+            else:
+                current_rule += [(name, ">", threshold)]
+                recurse(X, flt, tree_.children_right[node], current_rule)
+        return current_rule
+        #
+        # else:
+        #     # For a leaf, you might check if the prediction is "good"
+        #     # and then add the rule if it is.
+        #     # (Assume a binary classifier with positive class at index 1)
+        #     if tree.value[node][0, 1] > tree.value[node][0, 0]:
+        #         rules.append(current_rule)
+
+    rules = recurse(X, flt,0, [])
+    return rules
+
+def tree_analyze_hparams(id_tag,
                          project="EfficientIRL",
-                         opt_metric="summary.original_ep_return_mean"
                          ):
     from sklearn.tree import DecisionTreeRegressor
     from sklearn.model_selection import train_test_split
     from sklearn.tree import export_text
 
-    X, y = get_wandb_performance(bounds.keys(), project, id_tag, opt_metric)
+    opt_metric = ["summary.reward/original_ep_return_mean","summary.eirl/reward_correl"]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    tree = DecisionTreeRegressor(max_depth=4)
-    tree.fit(X_train, y_train)
-    print(export_text(tree, feature_names=list(X.columns)))
+    X, y = get_wandb_performance(None, project, id_tag, opt_metric)
+
+
+    X_clean = format_df_to_numbers(X)
+    flt = np.bitwise_and(
+        y["summary.reward/original_ep_return_mean"] > 350,
+        y["summary.eirl/reward_correl"] > 0.5
+    )
+    up = (~flt).sum()/flt.sum()
+    sample_weight = np.ones_like(flt)
+    sample_weight[flt] = up
+
+    # X_train, X_test, y_train, y_test = train_test_split(X, flt, test_size=0.2)
+    tree = DecisionTreeClassifier(random_state=0)
+    # tree = DecisionTreeClassifier(
+    #     random_state=0,
+    #     class_weight='balanced',
+    #     criterion='entropy',
+    #     min_impurity_decrease=0.0001  # Lower threshold for splitting
+    # )
+    tree.fit(X_clean, flt, sample_weight=sample_weight)
+    print(export_text(tree, feature_names=list(X_clean.columns)))
+    rules = extract_rules(X, flt, tree, list(X_clean.columns))
+
+    f_all = np.ones(len(X_clean))
+    for key, direction, value in rules:
+        if direction == "<=":
+            f = X_clean[key]<=value
+        else:
+            f = X_clean[key]>value
+        f_all = np.bitwise_and(f_all, f)
+        m = y[f_all]
+        print("\nMean:")
+        print(m.mean())
+        # print("Std:")
+        # print(m.std())
+
+    y[f_all]
+
     print("done")
 
+def format_df_to_numbers(X):
+    df = X.copy()
 
+    # Convert bool columns to int
+    bool_cols = df.select_dtypes(include=['bool']).columns
+    df[bool_cols] = df[bool_cols].astype(int)
+
+    # Apply one-hot encoding to object (and string) columns
+    object_cols = df.select_dtypes(include=['object']).columns
+    non_list_cols = [col for col in object_cols if not df[col].apply(lambda x: isinstance(x, list) or isinstance(x, dict)).any()]
+    final_cols = [col for col in non_list_cols if X[col].nunique() < 10]
+    # One-hot encode only non-list object columns
+    one_hots = pd.get_dummies(df[final_cols], columns=final_cols, drop_first=False).astype(int)
+
+    numerics = X.select_dtypes(include=['float','int','bool'])
+
+    df = pd.concat((numerics, one_hots),axis=1)
+    return df
 
 def optimize_hyperparams(bounds,
                          fixed,
@@ -269,10 +359,8 @@ def search_eirl():
         # enforce_rew_val_consistency=False,
     )
     bounds.update(fixed)
-    tree_analyze_hparams(bounds,
-                         id_tag="hp3",
+    tree_analyze_hparams(id_tag="hp3",
                          project="EfficientIRL",
-                         opt_metric="summary.original_ep_return_mean"
                          )
     # run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
 
@@ -328,7 +416,7 @@ def search_gflow():
     fixed = dict(
         algo="gflow",
         seed=[0, 42, 100, 532, 3432],
-        hard=[True, False],
+        hard=True,#[True, False],
         reward_type="state-action",#["next state", "state", "state-action", "next state only"],
         training_increments=5,
         extra_tags=["gflow0"],
@@ -338,23 +426,23 @@ def search_gflow():
         batch_size=256,
         # norm_reward=[False, True],
         net_arch=[[256, 256, 256, 256]],
-        learner_timesteps=0,
+        # learner_timesteps=0,
         n_envs=16,
         flip_cartpole_actions=True,
-        use_returns=[True, False],
+        use_returns=False,#[True, False],
         use_z=[True, False],
         log_prob_loss=["kl", "chi_square", "abs", None],
-        target_log_probs=[False, True],
+        target_log_probs=True,#[False, True],
         kl_coef=1.,
     )
     bounds = dict(
-        n_expert_demos=[1, 60],
+        n_expert_demos=[1, 32],
         learner_timesteps=[100_000, 1000_000],
-        n_epochs=[100, 1000],
-        val_coef=[0.1, 2.],
-        lr=[0.00015, 0.003],
+        n_epochs=[500, 1500],
+        val_coef=[0.1, 1.5],
+        lr=[0.00015, 0.001],
     )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.gflow/reward_correl", debug=False)
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.reward/original_ep_return_mean", debug=False)
 
 
 if __name__ == "__main__":
