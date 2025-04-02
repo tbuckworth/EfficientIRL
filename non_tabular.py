@@ -30,19 +30,20 @@ class NonTabularMDP:
         for i in range(n_traj):
             # sample state from mu:
             state_idx = self.sample(self.mu)
-            s0 = self.get_state(state_idx)
-            obs = s0.unsqueeze(0)
+            obs = self.get_state(state_idx)
+            # obs = s0.unsqueeze(0)
             acts = []
             rews = []
             for n in range(self.horizon-1):
                 action_probs = pi[state_idx]
                 action = self.sample(action_probs)
                 next_state_probs = self.T[state_idx,action]
-                s = self.get_state(next_state_probs)
+                s = self.sample(next_state_probs)
                 reward = self.R[s]
-                obs = torch.cat((obs, s.unsqueeze(0)),dim=0)
-                acts.append(action)
-                rews.append(reward)
+                s1 = self.get_state(s)
+                obs = torch.cat((obs, s1),dim=0)
+                acts.append(action.item())
+                rews.append(reward.item())
             traj = DictToArgs(dict(
                 obs=obs.cpu().numpy(),
                 acts=np.array(acts),
@@ -56,8 +57,12 @@ class NonTabularMDP:
         r = np.random.rand()
         return (x.cumsum(dim=-1)>r).argwhere()[0]
 
-    def get_state(self, i: int):
-        return torch.nn.functional.one_hot(torch.Long(i), self.n_states).to(self.device)
+    def get_state(self, i):
+        if isinstance(i, torch.Tensor):
+            t = i
+        else:
+            t = torch.tensor([i])
+        return torch.nn.functional.one_hot(t, self.n_states).to(self.device)
 
 def run():
     gamma = 0.99

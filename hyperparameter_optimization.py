@@ -338,7 +338,7 @@ def search_eirl():
         # [64, 128, 256, 64]],
         consistency_coef=30.,
         n_envs=16,
-        n_epochs=5,
+        # n_epochs=5,
         n_expert_demos=10,
         lr=0.0005,
         l2_weight=0.001,
