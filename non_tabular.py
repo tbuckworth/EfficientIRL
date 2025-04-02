@@ -9,6 +9,7 @@ from helper_local import DictToArgs
 from tabular import TabularMDP, AscenderLong
 import gymnasium
 
+
 class NonTabularMDP:
     def __init__(self, tabular_mdp: TabularMDP, horizon: int, device=None):
         assert horizon > 1, "horizon must be greater than 1"
@@ -34,14 +35,14 @@ class NonTabularMDP:
             # obs = s0.unsqueeze(0)
             acts = []
             rews = []
-            for n in range(self.horizon-1):
+            for n in range(self.horizon - 1):
                 action_probs = pi[state_idx].squeeze()
                 action = self.sample(action_probs)
-                next_state_probs = self.T[state_idx,action].squeeze()
-                s = self.sample(next_state_probs)
-                reward = self.R[s]
-                s1 = self.get_state(s)
-                obs = torch.cat((obs, s1),dim=0)
+                next_state_probs = self.T[state_idx, action].squeeze()
+                state_idx = self.sample(next_state_probs)
+                reward = self.R[state_idx]
+                s = self.get_state(state_idx)
+                obs = torch.cat((obs, s), dim=0)
                 acts.append(action.item())
                 rews.append(reward.item())
             traj = DictToArgs(dict(
@@ -49,15 +50,15 @@ class NonTabularMDP:
                 acts=np.array(acts),
                 rews=np.array(rews),
                 infos={},
-                terminal=False,#...or true?
+                terminal=True,  # ...or actually calc this in mdps?
             ))
             output.append(traj)
         return output
 
-    def sample(self, x:torch.tensor):
+    def sample(self, x: torch.tensor):
         assert x.sum() >= 1 - 1e-5, "x is not a prob dist"
         r = np.random.rand()
-        return (x.cumsum(dim=-1)>r).argwhere()[0]
+        return (x.cumsum(dim=-1) > r).argwhere()[0]
 
     def get_state(self, i):
         if isinstance(i, torch.Tensor):
@@ -66,16 +67,32 @@ class NonTabularMDP:
             t = torch.tensor([i])
         return torch.nn.functional.one_hot(t, self.n_states).to(self.device)
 
+
 def run():
     gamma = 0.99
     horizon = 10
-    n_epochs = 1000
-    env = AscenderLong(n_states=6, gamma=gamma)
-    run_gflow(env, gamma, horizon, n_epochs)
+    n_epochs = 100
+    policy_name = "Soft"
+    n_traj = 10
 
-def run_gflow(env, gamma, horizon, n_epochs):
+    env = AscenderLong(n_states=6, gamma=gamma)
     nt_env = NonTabularMDP(env, horizon)
-    expert_rollouts = nt_env.generate_trajectories("Soft", 10)
+    exp_trainer = run_gflow(nt_env, gamma, n_epochs, policy_name, n_traj)
+
+    states = torch.arange(nt_env.n_states)
+    obs = nt_env.get_state(states)
+    learned_r = exp_trainer.reward_func(obs.to(torch.float32), None, obs.to(torch.float32), None).detach()
+    new_env = AscenderLong(n_states=env.n_states, gamma=gamma, R=learned_r)
+
+    print(new_env.policies[policy_name].pi.round(decimals=2))
+    print(env.policies[policy_name].pi.round(decimals=2))
+
+    return
+
+
+def run_gflow(nt_env, gamma, n_epochs, policy_name="Soft", n_traj=10):
+
+    expert_rollouts = nt_env.generate_trajectories(policy_name, n_traj)
 
     expert_trainer = gflow.GFLOW(
         observation_space=nt_env.observation_space,
@@ -83,9 +100,13 @@ def run_gflow(env, gamma, horizon, n_epochs):
         demonstrations=expert_rollouts,
         gamma=gamma,
         net_arch=[8, 8],
+        log_prob_loss="kl",
+        target_log_probs=True,
+        reward_type="next state only",
     )
 
     expert_trainer.train(n_epochs)
+    return expert_trainer
 
 
 if __name__ == "__main__":

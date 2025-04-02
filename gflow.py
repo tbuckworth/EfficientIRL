@@ -2,6 +2,7 @@ import numpy as np
 import gymnasium as gym
 import torch
 from imitation.rewards.reward_nets import BasicRewardNet, ShapedRewardNet
+from matplotlib import pyplot as plt
 from stable_baselines3.common.policies import ActorCriticPolicy
 
 from helper_local import get_policy_for
@@ -177,7 +178,7 @@ class GFLOW:
         discounts[..., 0] = 1
         discounts = discounts.cumprod(dim=-1)
 
-        disc_rew = discounts * (rewards + entropy.squeeze() if not self.hard else 0)
+        disc_rew = discounts * (rewards + (entropy.squeeze() if not self.hard else 0))
         disc_val = discounts * values.squeeze()
 
         val_target = disc_rew.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
@@ -246,7 +247,7 @@ class GFLOW:
                 print(f"\t{k}: {mean_v:.2f}")
         self.stats = {}
 
-    def get_correl(self, a, b):
+    def get_correl(self, a, b, plot=False):
         # not set up for batch dims.
         #flatten?
         if not isinstance(a, np.ndarray):
@@ -256,6 +257,11 @@ class GFLOW:
         if b.std()==0:
             return np.nan
         assert(len(a) == len(b))
+        if plot:
+            # plt.scatter(x=b,y=b,label="True Rewards",color="black")
+            plt.scatter(x=b,y=a,label="Learned Rewards")
+            plt.legend()
+            plt.show()
         return np.corrcoef(a, b)[0,1]
 
 

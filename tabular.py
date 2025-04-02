@@ -843,7 +843,7 @@ def epsilon_greedy_policy(q_values, epsilon):
 
 
 class AscenderLong(TabularMDP):
-    def __init__(self, n_states, stochastic=False, gamma=GAMMA):
+    def __init__(self, n_states, stochastic=False, gamma=GAMMA, R=None):
         assert n_states % 2 == 0, (
             "Ascender requires a central starting state with an equal number of states to the left"
             " and right, plus an infinite terminal state. Therefore n_states must be even.")
@@ -859,9 +859,11 @@ class AscenderLong(TabularMDP):
 
         T[(0, -1, -2), :, -1] = 1  # /n_actions
 
-        R = torch.zeros(n_states)
-        R[-2] = 10
-        R[0] = -10
+        if R is None:
+            R = torch.zeros(n_states)
+            R[-2] = 10
+            R[0] = -10
+        assert(len(R) == n_states)
 
         mu = torch.zeros(n_states)
         mu[(n_states - 1) // 2] = 1.
