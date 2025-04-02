@@ -35,9 +35,9 @@ class NonTabularMDP:
             acts = []
             rews = []
             for n in range(self.horizon-1):
-                action_probs = pi[state_idx]
+                action_probs = pi[state_idx].squeeze()
                 action = self.sample(action_probs)
-                next_state_probs = self.T[state_idx,action]
+                next_state_probs = self.T[state_idx,action].squeeze()
                 s = self.sample(next_state_probs)
                 reward = self.R[s]
                 s1 = self.get_state(s)
@@ -48,6 +48,8 @@ class NonTabularMDP:
                 obs=obs.cpu().numpy(),
                 acts=np.array(acts),
                 rews=np.array(rews),
+                infos={},
+                terminal=False,#...or true?
             ))
             output.append(traj)
         return output
