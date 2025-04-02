@@ -242,7 +242,8 @@ class GFLOW:
         else:
             print(f"Epoch:{epoch}")
             for k, v in self.stats.items():
-                print(f"\t{k}: {v:.2f}")
+                mean_v = np.mean(np.array(v)[~np.isnan(v)])
+                print(f"\t{k}: {mean_v:.2f}")
         self.stats = {}
 
     def get_correl(self, a, b):

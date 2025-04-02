@@ -422,7 +422,7 @@ def search_gflow():
         hard=[True, False],
         reward_type=["state-action", "state", "next state only"],#["next state", "state", "state-action", "next state only"],
         training_increments=50,
-        extra_tags=["gflow0", "testing schdlr adv rwrdtyps"],
+        extra_tags=["gflow0", "testing schdlr adv rwrdtyps", "low_lr"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         gamma=0.98,
@@ -438,18 +438,18 @@ def search_gflow():
         target_log_probs=True,#[False, True],
         kl_coef=1.,
         val_coef=[0., 0.5],
-        adv_coef=[0., 0., 0., 0.25, 0.5, 1.0],
+        adv_coef=[0., 0., 0., 1.0],
         use_scheduler = [True, False],
     )
     bounds = dict(
-        n_expert_demos=[1, 32],
-        learner_timesteps=[500_000, 1500_000],
-        n_epochs=[500, 1500],
+        n_expert_demos=[20, 32],
+        learner_timesteps=[1500_000, 3000_000],
+        n_epochs=[1500, 3000],
         # val_coef=[0.1, 1.5],
-        lr=[0.000015, 0.001],
+        lr=[1e-8, 1e-4],
     )
     run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.reward/original_ep_return_mean", debug=False)
 
 
 if __name__ == "__main__":
-    search_eirl()
+    search_gflow()
