@@ -310,17 +310,17 @@ def run_forever(bounds, fixed, run_func, opt_metric, abs=False, debug=False):
 
 def search_eirl():
     fixed = dict(
-        algo="eirl2",
+        algo="eirl",
         seed=[0, 42, 100, 532, 3432],
-        hard=True,
-        reward_type=["next state", "state", "state-action", "next state only"],
+        hard=[True, False],
+        reward_type="next state only",#["next state", "state", "state-action", "next state only"],
         log_prob_adj_reward=False,
         neg_reward=False,
         maximize_reward=False,
         rew_const=False,
         training_increments=5,
         # n_expert_demos=10,
-        extra_tags=["eirl2", "fixed"],
+        extra_tags=["eirl", "fixed", "disentanglement_test3"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         # overrides={"gravity": 15.0},
@@ -332,13 +332,13 @@ def search_eirl():
         # n_envs=8,
         # norm_reward=[False, True],
         net_arch=[[256, 256, 256, 256]],
-        learner_timesteps=250_000,
+        # learner_timesteps=250_000,
         # [512, 512, 512, 512],
         # [128, 128, 128, 128],
         # [64, 128, 256, 64]],
         consistency_coef=30.,
         n_envs=16,
-        n_epochs=100,
+        # n_epochs=100,
         n_expert_demos=10,
         lr=0.0005,
         l2_weight=0.001,
@@ -346,13 +346,13 @@ def search_eirl():
     )
     bounds = dict(
         # consistency_coef=[2, 100.],
-        # n_epochs=[30, 150],
+        n_epochs=[30, 150],
         # n_envs = [8, 32],
         # # log_prob_adj_reward=False,
         # # neg_reward=False,
         # # maximize_reward=False,
         # n_expert_demos=[1, 10],
-        # # learner_timesteps=[100_000, 1000_000],
+        learner_timesteps=[250_000, 1000_000],
         # # gamma=[0.98],#[0.8, 0.999],
         # # training_increments=[5, 10],
         # lr=[0.00025, 0.001],
@@ -361,11 +361,11 @@ def search_eirl():
         # n_envs=[16, 48],
         # enforce_rew_val_consistency=False,
     )
-    bounds.update(fixed)
-    tree_analyze_hparams(id_tag=["disentanglement test", "disentanglement test2"],
-                         project="EfficientIRL",
-                         )
-    # run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
+    # bounds.update(fixed)
+    # tree_analyze_hparams(id_tag=["disentanglement test", "disentanglement test2"],
+    #                      project="EfficientIRL",
+    #                      )
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
 
 
 def search_meow():
@@ -452,4 +452,4 @@ def search_gflow():
 
 
 if __name__ == "__main__":
-    search_gflow()
+    search_eirl()

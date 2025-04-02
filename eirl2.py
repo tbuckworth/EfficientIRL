@@ -231,7 +231,7 @@ class EfficientIRLLossCalculator:
             rew_cons_loss = 0
 
         ns_adv_target = next_state_adv_func(nobs, None, obs, None)
-        # We leave final obs:
+        # We leave final obs: - TODO probs actually can keep final obs if in seals
         adv_cons_loss = ((actor_advantage - ns_adv_target) * (1 - dones.float())).pow(2).mean()
 
         reward_hat = reward_hat + rew_const
