@@ -338,7 +338,7 @@ def search_eirl():
         # [64, 128, 256, 64]],
         consistency_coef=30.,
         n_envs=16,
-        # n_epochs=100,
+        n_epochs=5,
         n_expert_demos=10,
         lr=0.0005,
         l2_weight=0.001,
@@ -365,7 +365,7 @@ def search_eirl():
     # tree_analyze_hparams(id_tag=["disentanglement test", "disentanglement test2"],
     #                      project="EfficientIRL",
     #                      )
-    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl")
+    run_forever(bounds, fixed, run_next_hyperparameters, opt_metric="summary.eirl/reward_correl", debug=True)
 
 
 def search_meow():

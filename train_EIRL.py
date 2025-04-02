@@ -220,6 +220,8 @@ def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_rew
         rew_const_adj = 0
     if log_prob_adj_reward:
         rfunc = expert_trainer.lp_adj_reward
+    elif reward_type=="next state only":
+        rfunc = expert_trainer.state_reward_func
     else:
         rfunc = expert_trainer.reward_func
     if overrides is not None:

@@ -1,9 +1,7 @@
 import numpy as np
 import gymnasium as gym
 import torch
-from imitation.algorithms import base
-from imitation.rewards.reward_nets import BasicShapedRewardNet, BasicRewardNet, ShapedRewardNet
-from jinja2 import optimizer
+from imitation.rewards.reward_nets import BasicRewardNet, ShapedRewardNet
 from stable_baselines3.common.policies import ActorCriticPolicy
 
 from helper_local import get_policy_for
@@ -105,9 +103,9 @@ class GFLOW:
         self.output_reward_function = BasicRewardNet(
             observation_space,
             action_space,
-            use_state,
-            use_action,
-            use_next_state
+            use_state=use_state,
+            use_action=use_action,
+            use_next_state=use_next_state
         )
         self.reward_net = CustomShapedRewardNet(
             self.output_reward_function,
@@ -146,7 +144,8 @@ class GFLOW:
 
     def train(self, n_epochs, progress_bar=None):
         for epoch in range(n_epochs):
-            self.custom_logger.record("epoch", epoch)
+            if self.custom_logger is not None:
+                self.custom_logger.record("epoch", epoch)
             for traj in self.rng.permutation(self.demonstrations):
                 loss, stats = self.trajectory_balance_loss(traj)
                 loss.backward()
@@ -236,8 +235,14 @@ class GFLOW:
     def log(self, epoch):
         for k, v in self.stats.items():
             mean_v = np.mean(np.array(v)[~np.isnan(v)])
-            self.custom_logger.record(k, mean_v)
-        self.custom_logger.dump(epoch)
+            if self.custom_logger is not None:
+                self.custom_logger.record(k, mean_v)
+        if self.custom_logger is not None:
+            self.custom_logger.dump(epoch)
+        else:
+            print(f"Epoch:{epoch}")
+            for k, v in self.stats.items():
+                print(f"\t{k}: {v:.2f}")
         self.stats = {}
 
     def get_correl(self, a, b):

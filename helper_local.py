@@ -385,7 +385,7 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., r
         def predict_processed(
                 state: np.ndarray,
                 action: np.ndarray,
-                next_state: np.ndarray = None,
+                next_state: np.ndarray,
                 done: np.ndarray = None,
                 **kwargs,
         ) -> np.ndarray:
