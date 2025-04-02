@@ -193,7 +193,7 @@ def trainEIRL(algo="eirl",
         wandb.finish()
         return
     env, wenv = override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
-                                             override_env_name, overrides)
+                                             override_env_name, overrides, reward_type)
     if flip_cartpole_actions:
         wenv = CartpoleVecEnvActionFlipWrapper(wenv)
     if overrides is not None:
@@ -213,7 +213,7 @@ def trainEIRL(algo="eirl",
 
 
 def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
-                                 override_env_name, overrides):
+                                 override_env_name, overrides, reward_type="state-action"):
     try:
         rew_const_adj = expert_trainer.reward_const.detach().cpu().numpy().item()
     except Exception:
@@ -226,7 +226,7 @@ def override_env_and_wrap_reward(env, env_name, expert_trainer, log_prob_adj_rew
         if override_env_name is None:
             override_env_name = env_name
         env = overridden_vec_env(override_env_name, n_envs, overrides)
-    wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj)
+    wenv = wrap_env_with_reward(env, rfunc, neg_reward, rew_const_adj, reward_type)
     return env, wenv
 
 
