@@ -118,7 +118,6 @@ class GFLOW:
         self.optimizer = torch.optim.Adam(list(self.forward_policy.parameters()) +
                                           list(self.backward_policy.parameters()) +
                                           list(self.output_reward_function.parameters()) +
-                                          list(self.reward_net.parameters()) +
                                           [self.Z_param],
                                           lr=lr)
         if self.use_scheduler:
