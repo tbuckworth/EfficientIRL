@@ -56,14 +56,20 @@ class GFLOW:
                  use_returns=True,
                  use_z=True,
                  kl_coef=1.,
+                 adv_coef=0.,
                  log_prob_loss=None,
-                 target_log_probs=False
-                 ):
+                 target_log_probs=False,
+                 use_scheduler=False,
+                 n_epochs=None):
+        assert(not n_epochs is None and use_scheduler, "use_scheduler requires n_epochs (predicted total training epochs")
+        self.n_epochs = n_epochs
+        self.use_scheduler = use_scheduler
         self.stats = {}
         self.reward_type = reward_type
         self.target_log_probs = target_log_probs
         self.log_prob_loss = log_prob_loss
         self.kl_coef = kl_coef
+        self.adv_coef = adv_coef
         self.use_z = use_z
         self.use_returns = use_returns
         self.hard = hard
@@ -115,7 +121,9 @@ class GFLOW:
                                           list(self.reward_net.parameters()) +
                                           [self.Z_param],
                                           lr=lr)
-
+        if self.use_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.n_epochs,
+                                                                        eta_min=0)
         if self.log_prob_loss == "kl":
             self.maybe_optimize_log_probs = lambda lf: -lf.mean()
         elif self.log_prob_loss == "chi_square":
@@ -144,6 +152,8 @@ class GFLOW:
                 loss, stats = self.trajectory_balance_loss(traj)
                 loss.backward()
                 self.optimizer.step()
+                if self.use_scheduler:
+                    self.scheduler.step()
                 self.optimizer.zero_grad()
                 self.accum_stats(stats)
             self.log(epoch)
@@ -177,6 +187,11 @@ class GFLOW:
 
         kl_loss = self.maybe_optimize_log_probs(log_forwards)
 
+        # Part of me thinks we should not have the entropy here or above. But that option is not accounted for.
+        # Also should we use actor_adv.detach() instead? I think the balance may be good for the actor, but not sure.
+        actor_adv = log_forwards + (entropy.squeeze() if self.hard else 0)
+        adv_loss = (actor_adv - rewards).pow(2).mean()
+
         # Balance Loss:
         if self.target_log_probs:
             log_forwards = log_forwards.detach()
@@ -190,7 +205,7 @@ class GFLOW:
         balance_loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
 
         # Total Loss:
-        loss = balance_loss + value_loss * self.val_coef + kl_loss * self.kl_coef
+        loss = balance_loss + value_loss * self.val_coef + kl_loss * self.kl_coef + adv_loss * self.adv_coef
 
         reward_advantage_correl = self.get_correl(rewards, true_rews)
         reward_correl = self.get_correl(dis_rewards, true_rews)

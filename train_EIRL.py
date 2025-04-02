@@ -77,6 +77,8 @@ def trainEIRL(algo="eirl",
               kl_coef=1.,
               log_prob_loss=None,
               target_log_probs=False,
+              use_scheduler=False,
+              adv_coef=0.,
               ):
     if flip_cartpole_actions and not re.search("CartPole", env_name):
         raise Exception(f"flip_cartpole_actions only works for CartPole envs")
@@ -158,6 +160,9 @@ def trainEIRL(algo="eirl",
             kl_coef=kl_coef,
             log_prob_loss=log_prob_loss,
             target_log_probs=target_log_probs,
+            use_scheduler=use_scheduler,
+            n_epochs=n_epochs,
+            adv_coef=adv_coef,
         )
     else:
         raise NotImplementedError(f"Unimplemented algorithm: {algo}")
