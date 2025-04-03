@@ -58,8 +58,10 @@ class GFLOW:
                  adv_coef=0.,
                  log_prob_loss=None,
                  target_log_probs=False,
+                 target_back_probs=False,
                  use_scheduler=False,
-                 n_epochs=None):
+                 n_epochs=None,
+                 ):
         assert(not n_epochs is None and use_scheduler, "use_scheduler requires n_epochs (predicted total training epochs")
         self.n_epochs = n_epochs
         self.use_scheduler = use_scheduler
@@ -67,6 +69,7 @@ class GFLOW:
         self.reward_type = reward_type
         self.target_log_probs = target_log_probs
         self.log_prob_loss = log_prob_loss
+        self.target_back_probs = target_back_probs
         self.kl_coef = kl_coef
         self.adv_coef = adv_coef
         self.use_z = use_z
@@ -185,6 +188,8 @@ class GFLOW:
         value_loss = ((disc_val - val_target)/discounts).pow(2).mean()
 
         kl_loss = self.maybe_optimize_log_probs(log_forwards)
+        if self.target_back_probs:
+            kl_loss = kl_loss + self.maybe_optimize_log_probs(log_backwards)
 
         # Part of me thinks we should not have the entropy here or above. But that option is not accounted for.
         # Also should we use actor_adv.detach() instead? I think the balance may be good for the actor, but not sure.
@@ -194,6 +199,8 @@ class GFLOW:
         # Balance Loss:
         if self.target_log_probs:
             log_forwards = log_forwards.detach()
+            if self.target_back_probs:
+                log_backwards = log_backwards.detach()
 
         log_forward = log_forwards.cumsum(dim=-1)
         log_backward = log_backwards.cumsum(dim=-1)
@@ -208,6 +215,8 @@ class GFLOW:
 
         reward_advantage_correl = self.get_correl(rewards, true_rews)
         reward_correl = self.get_correl(dis_rewards, true_rews)
+        if not np.isnan(reward_correl) and reward_correl > 0.95:
+            pass
         if isinstance(kl_loss, int):
             kl = np.nan
         else:

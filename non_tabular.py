@@ -1,14 +1,15 @@
 from typing import List
 
 import numpy as np
+import pandas as pd
 import torch
 from einops import einops
 
 import gflow
-from helper_local import DictToArgs
+from helper_local import DictToArgs, filter_params
 from tabular import TabularMDP, AscenderLong
 import gymnasium
-
+import concurrent.futures
 
 class NonTabularMDP:
     def __init__(self, tabular_mdp: TabularMDP, horizon: int, device=None):
@@ -24,9 +25,10 @@ class NonTabularMDP:
         self.observation_space = gymnasium.spaces.Box(0, 1, (self.n_states,))
         self.action_space = gymnasium.spaces.Discrete(self.n_actions)
 
-    def generate_trajectories(self, policy_name: str, n_traj: int) -> List[torch.tensor]:
+    def generate_trajectories(self, policy_name: str, n_traj: int, temp: int) -> List[torch.tensor]:
         assert policy_name in self.env.policies.keys(), f"Policy {policy_name} not found in Env {self.env.name}."
         pi = self.env.policies[policy_name].pi
+        pi = (pi.log()/temp).softmax(dim=-1)
         output = []
         for i in range(n_traj):
             # sample state from mu:
@@ -68,46 +70,151 @@ class NonTabularMDP:
         return torch.nn.functional.one_hot(t, self.n_states).to(self.device)
 
 
-def run():
-    gamma = 0.99
-    horizon = 10
-    n_epochs = 100
-    policy_name = "Soft"
-    n_traj = 10
+def get_idx(i, lens):
+    assert i < np.prod(lens), f"i must be below {np.prod(lens)}, not {i}"
+    output = []
+    for l in lens:
+        output.append(i % l)
+        i = i // l
+    return output
 
-    env = AscenderLong(n_states=6, gamma=gamma)
-    nt_env = NonTabularMDP(env, horizon)
-    exp_trainer = run_gflow(nt_env, gamma, n_epochs, policy_name, n_traj)
 
-    states = torch.arange(nt_env.n_states)
-    obs = nt_env.get_state(states)
-    learned_r = exp_trainer.reward_func(obs.to(torch.float32), None, obs.to(torch.float32), None).detach()
-    new_env = AscenderLong(n_states=env.n_states, gamma=gamma, R=learned_r)
+def run_experiment(n_threads=16):
+    ranges = dict(
+        gamma=[0.99],
+        net_arch=[[8, 8]],
+        log_prob_loss=["kl"],
+        target_log_probs=[True],
+        target_back_probs=[True, False],
+        reward_type=["next state only", "state"],
+        adv_coef=[0, 1.],
+        horizon=[7],
+        n_epochs=[100],
+        policy_name=["Hard Smax"],
+        n_traj=[20, 100],
+        temp=[1,5],
+        n_trials=[10],
+        n_states=[6],
+        lr=[1e-3],
+        val_coef=[0, 0.5],
+        hard=[True, False],
+        use_returns=[True, False],
+        use_z=[True, False],
+        kl_coef=[1.],
+        use_scheduler=[False],
+    )
+    lens = [len(v) for k, v in ranges.items()]
+    n_experiments = np.prod(lens)
+    print(f"Running {n_experiments} experiments")
+    def subfunction(sub_list):
+        # Process each experiment in the sublist and return results
+        results = []
+        for i in sub_list:
+            idx = get_idx(i, lens)
+            cfg = {k: ranges[k][i] for k, i in zip(ranges.keys(), idx)}
+            # Simulate some processing and return a result (modify as needed)
+            results.append(run_config(cfg))
+        return results
 
-    print(new_env.policies[policy_name].pi.round(decimals=2))
-    print(env.policies[policy_name].pi.round(decimals=2))
-
+    results = run_concurrently(n_experiments, n_threads, subfunction)
+    df = pd.DataFrame(results)
+    df.to_csv("data/experiments.csv", index=False)
     return
 
+def split_list(n_experiments, n_threads):
+    experiments = list(range(n_experiments))
+    chunk_size = (n_experiments + n_threads - 1) // n_threads  # Ceiling division
+    return [experiments[i:i + chunk_size] for i in range(0, n_experiments, chunk_size)]
 
-def run_gflow(nt_env, gamma, n_epochs, policy_name="Soft", n_traj=10):
 
-    expert_rollouts = nt_env.generate_trajectories(policy_name, n_traj)
+def run_concurrently(n_experiments, n_threads, subfunction):
+    chunks = split_list(n_experiments, n_threads)
+    collated_results = []
 
+    # Using ThreadPoolExecutor to handle threads and capture return values
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
+        futures = [executor.submit(subfunction, chunk) for chunk in chunks]
+        for future in concurrent.futures.as_completed(futures):
+            collated_results.extend(future.result())
+
+    return collated_results
+
+
+
+def run():
+    cfg = dict(
+        gamma=0.99,
+        net_arch=[8, 8],
+        log_prob_loss="kl",
+        target_log_probs=True,
+        target_back_probs=True,
+        reward_type="next state only",
+        adv_coef=1.,
+        horizon=10,
+        n_epochs=100,
+        policy_name="Hard Smax",
+        n_traj=100,
+        temp=5,
+        n_trials=10,
+        n_states=6,
+    )
+    results = run_config(cfg)
+
+
+def run_config(cfg):
+
+    n_states = cfg["n_states"]
+    gamma = cfg["gamma"]
+    horizon = cfg["horizon"]
+    n_trials = cfg["n_trials"]
+    policy_name = cfg["policy_name"]
+
+    env = AscenderLong(n_states=n_states, gamma=gamma)
+    nt_env = NonTabularMDP(env, horizon)
+    scores = []
+    correls = []
+    for i in range(n_trials):
+        exp_trainer = run_gflow(cfg, nt_env)
+
+        states = torch.arange(nt_env.n_states)
+        obs = nt_env.get_state(states)
+        learned_r = exp_trainer.reward_func(obs.to(torch.float32), None, obs.to(torch.float32), None).detach()
+        new_env = AscenderLong(n_states=env.n_states, gamma=gamma, R=learned_r)
+
+        new_pi = new_env.policies[policy_name].pi
+        pi = env.policies[policy_name].pi
+        kl_div_learned = (-pi*new_pi.log()).sum(dim=-1).mean().item()
+        min_kl_div = (-pi*pi.log()).sum(dim=-1).mean().item()
+        score = 1-min_kl_div/kl_div_learned
+        correl = exp_trainer.get_correl(learned_r, env.reward_vector)
+        scores.append(score)
+        correls.append(correl)
+
+    cfg["scores_mean"] = np.mean(scores)
+    cfg["scores_std"] = np.std(scores)
+    cfg["correls_mean"] = np.mean(correls)
+    cfg["correls_std"] = np.std(correls)
+
+    return cfg
+
+
+def run_gflow(cfg, nt_env):
+    n_epochs = cfg["n_epochs"]
+    n_traj = cfg["n_traj"]
+    temp = cfg["temp"]
+    policy_name = cfg["policy_name"]
+
+    expert_rollouts = nt_env.generate_trajectories(policy_name, n_traj, temp)
+    #TODO: suppress the printing when in multi-threading
     expert_trainer = gflow.GFLOW(
         observation_space=nt_env.observation_space,
         action_space=nt_env.action_space,
         demonstrations=expert_rollouts,
-        gamma=gamma,
-        net_arch=[8, 8],
-        log_prob_loss="kl",
-        target_log_probs=True,
-        reward_type="next state only",
+        **filter_params(cfg, gflow.GFLOW)
     )
-
     expert_trainer.train(n_epochs)
     return expert_trainer
 
 
 if __name__ == "__main__":
-    run()
+    run_experiment()
