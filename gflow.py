@@ -146,9 +146,9 @@ class GFLOW:
     def reward_func(self) -> BasicRewardNet:
         return self.output_reward_function
 
-    def train(self, n_epochs, progress_bar=None):
+    def train(self, n_epochs, progress_bar=None, log=True):
         for epoch in range(n_epochs):
-            if self.custom_logger is not None:
+            if log and self.custom_logger is not None:
                 self.custom_logger.record("epoch", epoch)
             for traj in self.rng.permutation(self.demonstrations):
                 loss, stats = self.trajectory_balance_loss(traj)
@@ -158,7 +158,8 @@ class GFLOW:
                     self.scheduler.step()
                 self.optimizer.zero_grad()
                 self.accum_stats(stats)
-            self.log(epoch)
+            if log:
+                self.log(epoch)
 
     def trajectory_balance_loss(self, traj):
         obs = torch.FloatTensor(traj.obs).to(device=self.device)

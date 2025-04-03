@@ -212,7 +212,7 @@ def run_gflow(cfg, nt_env):
         demonstrations=expert_rollouts,
         **filter_params(cfg, gflow.GFLOW)
     )
-    expert_trainer.train(n_epochs)
+    expert_trainer.train(n_epochs, log=False)
     return expert_trainer
 
 
