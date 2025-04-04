@@ -120,7 +120,7 @@ def run_experiment(n_threads=16):
     df = pd.DataFrame(results)
     df.to_csv("data/experiments.csv", index=False)
     return
-
+n
 def split_list(n_experiments, n_threads):
     experiments = list(range(n_experiments))
     chunk_size = (n_experiments + n_threads - 1) // n_threads  # Ceiling division
