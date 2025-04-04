@@ -14,6 +14,7 @@ try:
     import wandb
     from private_login import wandb_login
 except ImportError:
+    wandb = wandb_login = None
     pass
 
 
@@ -51,6 +52,7 @@ def get_wandb_performance(hparams, project="EfficientIRL", id_tag="sa_rew",
         s_dict["name"] = n
         all_dicts.append(s_dict)
 
+    # maybe this should just be DataFrame(all_dicts) - test
     df = pd.DataFrame.from_dict(all_dicts)
     try:
         y = df[opt_metric]
@@ -178,8 +180,6 @@ def extract_rules(X, flt, tree, feature_names):
 def tree_analyze_hparams(id_tag,
                          project="EfficientIRL",
                          ):
-    from sklearn.tree import DecisionTreeRegressor
-    from sklearn.model_selection import train_test_split
     from sklearn.tree import export_text
 
     opt_metric = ["summary.reward/original_ep_return_mean","summary.eirl/reward_correl"]
@@ -291,7 +291,7 @@ def optimize_hyperparams(bounds,
 
 
 def init_wandb(cfg, prefix="symbolic_graph"):
-    name = np.random.randint(1e5)
+    name = np.random.randint(int(1e5))
     wandb_login()
     wb_resume = "allow"  # if args.model_file is None else "must"
     project = "EfficientIRL"
