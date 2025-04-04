@@ -3,7 +3,6 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
-from einops import einops
 
 import gflow
 from helper_local import DictToArgs, filter_params
@@ -57,7 +56,8 @@ class NonTabularMDP:
             output.append(traj)
         return output
 
-    def sample(self, x: torch.tensor):
+    @staticmethod
+    def sample(x: torch.tensor):
         assert x.sum() >= 1 - 1e-5, "x is not a prob dist"
         r = np.random.rand()
         return (x.cumsum(dim=-1) > r).argwhere()[0]
@@ -116,11 +116,11 @@ def run_experiment(n_threads=16):
             results.append(run_config(cfg))
         return results
 
-    results = run_concurrently(n_experiments, n_threads, subfunction)
-    df = pd.DataFrame(results)
+    all_results = run_concurrently(n_experiments, n_threads, subfunction)
+    df = pd.DataFrame(all_results)
     df.to_csv("data/experiments.csv", index=False)
     return
-n
+
 def split_list(n_experiments, n_threads):
     experiments = list(range(n_experiments))
     chunk_size = (n_experiments + n_threads - 1) // n_threads  # Ceiling division
