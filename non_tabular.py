@@ -1,3 +1,4 @@
+import threading
 from typing import List
 
 import numpy as np
@@ -80,7 +81,7 @@ def get_idx(i, lens):
     return output
 
 
-def run_experiment(n_threads=2):
+def run_experiment(n_threads=8):
     ranges = dict(
         gamma=[0.99],
         net_arch=[[8, 8]],
@@ -104,42 +105,41 @@ def run_experiment(n_threads=2):
         kl_coef=[1.],
         use_scheduler=[False],
     )
-    # test ranges:
-    ranges = dict(
-        gamma=[0.99],
-        net_arch=[[8, 8]],
-        log_prob_loss=["kl"],
-        target_log_probs=[True],
-        target_back_probs=[True, False],
-        reward_type=["next state only", "state"],
-        adv_coef=[0],
-        horizon=[7],
-        n_epochs=[10],
-        policy_name=["Hard Smax"],
-        n_traj=[20],
-        temp=[1],
-        n_trials=[3],
-        n_states=[6],
-        lr=[1e-3],
-        val_coef=[0],
-        hard=[True],
-        use_returns=[True],
-        use_z=[True],
-        kl_coef=[1.],
-        use_scheduler=[False],
-    )
+    # # test ranges:
+    # ranges = dict(
+    #     gamma=[0.99],
+    #     net_arch=[[8, 8]],
+    #     log_prob_loss=["kl"],
+    #     target_log_probs=[True],
+    #     target_back_probs=[True, False],
+    #     reward_type=["next state only", "state"],
+    #     adv_coef=[0],
+    #     horizon=[7],
+    #     n_epochs=[10],
+    #     policy_name=["Hard Smax"],
+    #     n_traj=[20],
+    #     temp=[1],
+    #     n_trials=[3],
+    #     n_states=[6],
+    #     lr=[1e-3],
+    #     val_coef=[0],
+    #     hard=[True],
+    #     use_returns=[True],
+    #     use_z=[True],
+    #     kl_coef=[1.],
+    #     use_scheduler=[False],
+    # )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
     print(f"Running {n_experiments} experiments across {n_threads} threads")
-    def subfunction(sub_list):
+    def subfunction(i):
         # Process each experiment in the sublist and return results
-        results = []
-        for i in sub_list:
-            idx = get_idx(i, lens)
-            cfg = {k: ranges[k][i] for k, i in zip(ranges.keys(), idx)}
-            # Simulate some processing and return a result (modify as needed)
-            results.append(run_config(cfg))
-        return results
+        # results = []
+        idx = get_idx(i, lens)
+        cfg = {k: ranges[k][i] for k, i in zip(ranges.keys(), idx)}
+        # Simulate some processing and return a result (modify as needed)
+        # results.append(run_config(cfg))
+        return run_config(cfg)
 
     all_results = run_concurrently(n_experiments, n_threads, subfunction)
     df = pd.DataFrame(all_results)
@@ -153,10 +153,11 @@ def split_list(n_experiments, n_threads):
 
 
 def run_concurrently(n_experiments, n_threads, subfunction):
-    chunks = split_list(n_experiments, n_threads)
-    collated_results = []
+    # chunks = split_list(n_experiments, n_threads)
+    results = []
 
     progress = tqdm(total=n_experiments, desc="Processing experiments")
+    lock = threading.Lock()
 
     # Using ThreadPoolExecutor to handle threads and capture return values
     # with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
@@ -166,15 +167,14 @@ def run_concurrently(n_experiments, n_threads, subfunction):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
         # Map each future to the number of experiments it processes
-        futures = {executor.submit(subfunction, chunk): len(chunk) for chunk in chunks}
+        futures = [executor.submit(subfunction, exp) for exp in range(n_experiments)]
         for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            collated_results.extend(result)
+            results.append(future.result())
             # Update progress by number of experiments processed in this chunk
-            progress.update(futures[future])
+            with lock:
+                progress.update(1)
     progress.close()
-
-    return collated_results
+    return results
 
 
 
