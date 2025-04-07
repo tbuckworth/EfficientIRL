@@ -3,6 +3,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
+from tqdm import tqdm
 
 import gflow
 from helper_local import DictToArgs, filter_params
@@ -79,7 +80,7 @@ def get_idx(i, lens):
     return output
 
 
-def run_experiment(n_threads=16):
+def run_experiment(n_threads=2):
     ranges = dict(
         gamma=[0.99],
         net_arch=[[8, 8]],
@@ -93,7 +94,7 @@ def run_experiment(n_threads=16):
         policy_name=["Hard Smax"],
         n_traj=[20, 100],
         temp=[1,5],
-        n_trials=[10],
+        n_trials=[5],
         n_states=[6],
         lr=[1e-3],
         val_coef=[0, 0.5],
@@ -103,9 +104,33 @@ def run_experiment(n_threads=16):
         kl_coef=[1.],
         use_scheduler=[False],
     )
+    # test ranges:
+    ranges = dict(
+        gamma=[0.99],
+        net_arch=[[8, 8]],
+        log_prob_loss=["kl"],
+        target_log_probs=[True],
+        target_back_probs=[True, False],
+        reward_type=["next state only", "state"],
+        adv_coef=[0],
+        horizon=[7],
+        n_epochs=[10],
+        policy_name=["Hard Smax"],
+        n_traj=[20],
+        temp=[1],
+        n_trials=[3],
+        n_states=[6],
+        lr=[1e-3],
+        val_coef=[0],
+        hard=[True],
+        use_returns=[True],
+        use_z=[True],
+        kl_coef=[1.],
+        use_scheduler=[False],
+    )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
-    print(f"Running {n_experiments} experiments")
+    print(f"Running {n_experiments} experiments across {n_threads} threads")
     def subfunction(sub_list):
         # Process each experiment in the sublist and return results
         results = []
@@ -131,11 +156,23 @@ def run_concurrently(n_experiments, n_threads, subfunction):
     chunks = split_list(n_experiments, n_threads)
     collated_results = []
 
+    progress = tqdm(total=n_experiments, desc="Processing experiments")
+
     # Using ThreadPoolExecutor to handle threads and capture return values
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
+    #     futures = [executor.submit(subfunction, chunk) for chunk in chunks]
+    #     for future in concurrent.futures.as_completed(futures):
+    #         collated_results.extend(future.result())
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
-        futures = [executor.submit(subfunction, chunk) for chunk in chunks]
+        # Map each future to the number of experiments it processes
+        futures = {executor.submit(subfunction, chunk): len(chunk) for chunk in chunks}
         for future in concurrent.futures.as_completed(futures):
-            collated_results.extend(future.result())
+            result = future.result()
+            collated_results.extend(result)
+            # Update progress by number of experiments processed in this chunk
+            progress.update(futures[future])
+    progress.close()
 
     return collated_results
 
@@ -181,14 +218,15 @@ def run_config(cfg):
         learned_r = exp_trainer.reward_func(obs.to(torch.float32), None, obs.to(torch.float32), None).detach()
         new_env = AscenderLong(n_states=env.n_states, gamma=gamma, R=learned_r)
 
-        new_pi = new_env.policies[policy_name].pi
-        pi = env.policies[policy_name].pi
-        kl_div_learned = (-pi*new_pi.log()).sum(dim=-1).mean().item()
-        min_kl_div = (-pi*pi.log()).sum(dim=-1).mean().item()
-        score = 1-min_kl_div/kl_div_learned
-        correl = exp_trainer.get_correl(learned_r, env.reward_vector)
-        scores.append(score)
-        correls.append(correl)
+        if policy_name in new_env.policies.keys() and new_env.policies[policy_name] is not None:
+            new_pi = new_env.policies[policy_name].pi
+            pi = env.policies[policy_name].pi
+            kl_div_learned = (-pi*new_pi.log()).sum(dim=-1).mean().item()
+            min_kl_div = (-pi*pi.log()).sum(dim=-1).mean().item()
+            score = min_kl_div/kl_div_learned
+            correl = exp_trainer.get_correl(learned_r, env.reward_vector)
+            scores.append(score)
+            correls.append(correl)
 
     cfg["scores_mean"] = np.mean(scores)
     cfg["scores_std"] = np.std(scores)
@@ -205,7 +243,6 @@ def run_gflow(cfg, nt_env):
     policy_name = cfg["policy_name"]
 
     expert_rollouts = nt_env.generate_trajectories(policy_name, n_traj, temp)
-    #TODO: suppress the printing when in multi-threading
     expert_trainer = gflow.GFLOW(
         observation_space=nt_env.observation_space,
         action_space=nt_env.action_space,
