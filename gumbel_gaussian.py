@@ -89,6 +89,7 @@ class GumbelSoftmaxGaussian(Distribution):
         else:
             # Evaluation mode
             self.soft = False
+            #TODO: maybe we setup an action lookup in this case, so that we can
         return self
 
     def eval(self):
@@ -146,8 +147,7 @@ class GumbelSoftmaxGaussian(Distribution):
             ).sum(dim=-1)
             return gumbel_log_prob + gauss_log_prob
         # No Gaussian => no additional log-prob
-        # TODO: check then when hard, this is just the same as the log_softmax
-        #  (should be, because z_gumbel should be one_hot in that case)
+        assert torch.allclose(actions, self.mean_actions), "Evaluating different actions than generated."
         return gumbel_log_prob
 
     def entropy(self) -> torch.Tensor:
