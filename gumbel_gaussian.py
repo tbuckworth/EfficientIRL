@@ -7,6 +7,7 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 
 from stable_baselines3 import PPO
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.torch_layers import MlpExtractor
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.env_util import make_vec_env
@@ -35,7 +36,7 @@ class SimpleContEnv(gym.Env):
         reward = -np.linalg.norm(action - 0.5)
         self.state = self.np_random.uniform(-1, 1, size=4).astype(np.float32)
         done = False
-        return self.state, reward, done, {}
+        return self.state, reward, done, done, {}
 
 # --------------------------------------------------------------------
 # 2. GumbelSoftmax → MLP → Gaussian distribution, with toggles
@@ -50,7 +51,7 @@ class GumbelSoftmaxGaussian(Distribution):
       - skip the Gaussian entirely (just use the MLP’s mean as output)
       - log_prob = log p_gumbel(z) only
     """
-    def __init__(self, action_dim, hidden_dim=64):
+    def __init__(self, action_dim, hidden_dim=64, device=None):
         super().__init__()
         self.action_dim = action_dim
 
@@ -60,6 +61,8 @@ class GumbelSoftmaxGaussian(Distribution):
             nn.ReLU(),
             nn.Linear(hidden_dim, 2 * action_dim)  # => [mean, log_std]
         )
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.mlp.to(device=self.device)
 
         # Internal states that get set in proba_distribution(...)
         self.logits = None
@@ -226,8 +229,8 @@ class CustomGumbelPolicy(ActorCriticPolicy):
 # 4. Demo training loop with PPO
 # --------------------------------------------------------------------
 if __name__ == "__main__":
-    env = make_vec_env(SimpleContEnv, n_envs=1)
-
+    # env = make_vec_env(SimpleContEnv, n_envs=1)
+    env = make_vec_env("Pendulum-v1", n_envs=16)
     model = PPO(
         policy=CustomGumbelPolicy,
         env=env,
@@ -238,17 +241,19 @@ if __name__ == "__main__":
     )
 
     # Train (soft Gumbel + Gaussian).
-    model.learn(total_timesteps=10_000)
+    model.learn(total_timesteps=100_000)
 
     # Evaluate in "hard Gumbel, no Gaussian" mode.
     # SB3 does: model.policy.eval(), or we can do:
     model.policy.eval()
 
-    obs = env.reset()
-    print("\nEVALUATION (Hard Gumbel, No Gaussian)\n")
-    for _ in range(5):
-        # 'deterministic=False' just calls distribution.sample()
-        # but we are in eval mode => sample() is effectively the argmax (one-hot) -> MLP -> mean.
-        action, _ = model.predict(obs, deterministic=False)
-        obs, reward, done, _info = env.step(action)
-        print(f"Action: {action}, Reward: {reward}")
+    rewards, _ = evaluate_policy(model.policy, env, 10, return_episode_rewards=True)
+    print(f"Rewards:{rewards}")
+    # obs = env.reset()
+    # print("\nEVALUATION (Hard Gumbel, No Gaussian)\n")
+    # for _ in range(5):
+    #     # 'deterministic=False' just calls distribution.sample()
+    #     # but we are in eval mode => sample() is effectively the argmax (one-hot) -> MLP -> mean.
+    #     action, _ = model.predict(obs, deterministic=False)
+    #     obs, reward, done, _info = env.step(action)
+    #     print(f"Action: {action}, Reward: {reward}")
