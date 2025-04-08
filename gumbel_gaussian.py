@@ -56,13 +56,13 @@ class GumbelSoftmaxGaussian(Distribution):
       - skip the Gaussian entirely (just use the MLP’s mean as output)
       - log_prob = log p_gumbel(z) only
     """
-    def __init__(self, action_dim, hidden_dim=64, device=None):
+    def __init__(self, action_dim, logit_dim, hidden_dim=64, device=None):
         super().__init__()
         self.action_dim = action_dim
-
+        self.logit_dim = logit_dim
         # MLP that maps from "gumbel embedding" (size action_dim) -> (mean, log_std)
         self.mlp = nn.Sequential(
-            nn.Linear(action_dim, hidden_dim),
+            nn.Linear(logit_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, 2 * action_dim)  # => [mean, log_std]
         )
@@ -177,7 +177,7 @@ class GumbelSoftmaxGaussian(Distribution):
         For our distribution, we simply return a linear layer that outputs logits
         for our Gumbel softmax.
         """
-        net = nn.Linear(latent_dim, self.action_dim)
+        net = nn.Linear(latent_dim, self.logit_dim) #should this be action dim? i don't think so
         return net
 
     def actions_from_params(self, logits: torch.Tensor) -> torch.Tensor:
@@ -202,16 +202,18 @@ class GumbelSoftmaxGaussian(Distribution):
 # 3. Custom policy that toggles the distribution’s mode
 # --------------------------------------------------------------------
 class CustomGumbelPolicy(ActorCriticPolicy):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, max_actions, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.max_actions = max_actions
+        self.logit_dim = int(np.ceil(np.log2(max_actions)))
         # The MlpExtractor to process observations
         self.mlp_extractor = MlpExtractor(self.features_dim, net_arch=[64, 64], activation_fn=nn.ReLU)
 
         # The dimension for the Gumbel embedding (a "categorical" of size action_dim).
-        action_dim = self.action_space.shape[0]
-        self.logit_layer = nn.Linear(self.mlp_extractor.latent_dim_pi, action_dim)
+        self.action_dim = self.action_space.shape[0]
+        self.logit_layer = nn.Linear(self.mlp_extractor.latent_dim_pi, self.logit_dim)
 
-        self.custom_dist = GumbelSoftmaxGaussian(action_dim)
+        self.custom_dist = GumbelSoftmaxGaussian(self.action_dim, self.logit_dim)
 
     def train(self, mode=True):
         """
