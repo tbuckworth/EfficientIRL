@@ -1,9 +1,10 @@
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from gym import spaces
+from gymnasium import spaces
+from gymnasium.utils import seeding
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import MlpExtractor
@@ -18,18 +19,21 @@ class SimpleContEnv(gym.Env):
     def __init__(self):
         super().__init__()
         self.observation_space = spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)
-        # Example: 2D continuous actions in [-1,1]
         self.action_space = spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
         self.state = np.zeros(4, dtype=np.float32)
+        self.seed()  # initialize the seed
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
 
     def reset(self, **kwargs):
-        self.state = np.random.uniform(-1, 1, size=4).astype(np.float32)
-        return self.state
+        self.state = self.np_random.uniform(-1, 1, size=4).astype(np.float32)
+        return self.state, {}
 
     def step(self, action):
-        # Reward is higher if action is near [0.5, 0.5], for demo
         reward = -np.linalg.norm(action - 0.5)
-        self.state = np.random.uniform(-1, 1, size=4).astype(np.float32)
+        self.state = self.np_random.uniform(-1, 1, size=4).astype(np.float32)
         done = False
         return self.state, reward, done, {}
 
