@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import gymnasium as gym
 import numpy as np
 import torch
@@ -12,6 +14,9 @@ from stable_baselines3.common.torch_layers import MlpExtractor
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.distributions import Distribution
+
+from helper_local import filter_params
+
 
 # --------------------------------------------------------------------
 # 1. Simple continuous-action environment
@@ -229,19 +234,31 @@ class CustomGumbelPolicy(ActorCriticPolicy):
 # 4. Demo training loop with PPO
 # --------------------------------------------------------------------
 if __name__ == "__main__":
+    hparams = OrderedDict([('clip_range', 0.2),
+                 ('ent_coef', 0.0),
+                 ('gae_lambda', 0.95),
+                 ('gamma', 0.9),
+                 ('learning_rate', 0.001),
+                 ('n_envs', 4),
+                 ('n_epochs', 10),
+                 ('n_steps', 1024),
+                 ('n_timesteps', 100000.0),
+
+                 ('sde_sample_freq', 4),
+                 ('use_sde', True),
+                 ('normalize', False)])
+
     # env = make_vec_env(SimpleContEnv, n_envs=1)
-    env = make_vec_env("Pendulum-v1", n_envs=16)
+    env = make_vec_env("Pendulum-v1", **filter_params(hparams, make_vec_env))
     model = PPO(
         policy=CustomGumbelPolicy,
         env=env,
         verbose=1,
-        learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=64,
+        **filter_params(hparams,PPO)
     )
 
     # Train (soft Gumbel + Gaussian).
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=1000_000)
 
     # Evaluate in "hard Gumbel, no Gaussian" mode.
     # SB3 does: model.policy.eval(), or we can do:
