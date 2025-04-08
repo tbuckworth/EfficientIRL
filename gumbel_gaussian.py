@@ -157,6 +157,35 @@ class GumbelSoftmaxGaussian(Distribution):
         entropy = -(log_probs.exp()*log_probs).sum(dim=-1)
         return entropy
 
+    # abstract methods:
+
+    def proba_distribution_net(self, latent_dim: int, action_space):
+        """
+        Create and return a network that maps latent features to distribution parameters.
+        For our distribution, we simply return a linear layer that outputs logits
+        for our Gumbel softmax.
+        """
+        net = nn.Linear(latent_dim, self.action_dim)
+        return net
+
+    def actions_from_params(self, logits: torch.Tensor) -> torch.Tensor:
+        """
+        Given logits, compute the distribution parameters and sample an action.
+        This is equivalent to calling proba_distribution(...) then sample().
+        """
+        self.proba_distribution(logits)
+        return self.sample()
+
+    def log_prob_from_params(self, logits: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+        """
+        Given logits, compute the distribution parameters, sample an action, and return both
+        the action and its log probability.
+        """
+        self.proba_distribution(logits)
+        action = self.sample()
+        logp = self.log_prob(action)
+        return action, logp
+
 # --------------------------------------------------------------------
 # 3. Custom policy that toggles the distribution’s mode
 # --------------------------------------------------------------------
@@ -164,7 +193,7 @@ class CustomGumbelPolicy(ActorCriticPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # The MlpExtractor to process observations
-        self.mlp_extractor = MlpExtractor(self.features_dim, net_arch=[64, 64])
+        self.mlp_extractor = MlpExtractor(self.features_dim, net_arch=[64, 64], activation_fn=nn.ReLU)
 
         # The dimension for the Gumbel embedding (a "categorical" of size action_dim).
         action_dim = self.action_space.shape[0]
