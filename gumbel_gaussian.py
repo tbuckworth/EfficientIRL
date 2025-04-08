@@ -202,10 +202,10 @@ class GumbelSoftmaxGaussian(Distribution):
 # 3. Custom policy that toggles the distribution’s mode
 # --------------------------------------------------------------------
 class CustomGumbelPolicy(ActorCriticPolicy):
-    def __init__(self, max_actions, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.max_actions = max_actions
-        self.logit_dim = int(np.ceil(np.log2(max_actions)))
+        self.max_actions = 64
+        self.logit_dim = int(np.ceil(np.log2(self.max_actions)))
         # The MlpExtractor to process observations
         self.mlp_extractor = MlpExtractor(self.features_dim, net_arch=[64, 64], activation_fn=nn.ReLU)
 
