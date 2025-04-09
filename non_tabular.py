@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
+from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 import gflow
@@ -11,6 +12,37 @@ from helper_local import DictToArgs, filter_params
 from tabular import TabularMDP, AscenderLong
 import gymnasium
 import concurrent.futures
+
+
+def significance_matrix(df, mean_col, std_col):
+    from scipy.stats import norm
+
+    # Assuming your dataframe is called df and has columns 'correls_mean' and 'correls_std'
+    means = df[mean_col].values
+    stds = df[std_col].values
+
+    # Create difference and standard error matrices via broadcasting
+    diff = means[:, None] - means[None, :]  # Difference between means (n x n matrix)
+    se = np.sqrt(stds[:, None] ** 2 + stds[None, :] ** 2)  # Standard error assuming independence
+
+    # Compute t-statistics for a one-tailed test (row mean > column mean)
+    t_stat = diff / se
+
+    # For a one-sided test, the p-value is given by: p = 1 - CDF(t_stat)
+    p_matrix = 1 - norm.cdf(t_stat)
+
+    # Boolean matrix: True if row has significantly higher mean than column at p < 0.05
+    signif_matrix = p_matrix < 0.05
+
+    # Optional: convert to pandas DataFrame for readability
+    p_values_df = pd.DataFrame(p_matrix, index=df.index, columns=df.index)
+    signif_df = pd.DataFrame(signif_matrix, index=df.index, columns=df.index)
+
+    print("P-values matrix:")
+    print(p_values_df)
+    print("\nSignificance matrix (True if row mean > column mean significantly at p < 0.05):")
+    print(signif_df)
+
 
 class NonTabularMDP:
     def __init__(self, tabular_mdp: TabularMDP, horizon: int, device=None):
@@ -29,7 +61,7 @@ class NonTabularMDP:
     def generate_trajectories(self, policy_name: str, n_traj: int, temp: int) -> List[torch.tensor]:
         assert policy_name in self.env.policies.keys(), f"Policy {policy_name} not found in Env {self.env.name}."
         pi = self.env.policies[policy_name].pi
-        pi = (pi.log()/temp).softmax(dim=-1)
+        pi = (pi.log() / temp).softmax(dim=-1)
         output = []
         for i in range(n_traj):
             # sample state from mu:
@@ -94,7 +126,7 @@ def run_experiment(n_threads=8):
         n_epochs=[100],
         policy_name=["Hard Smax"],
         n_traj=[20, 100],
-        temp=[1,5],
+        temp=[1, 5],
         n_trials=[5],
         n_states=[6],
         lr=[1e-3],
@@ -132,6 +164,7 @@ def run_experiment(n_threads=8):
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
     print(f"Running {n_experiments} experiments across {n_threads} threads")
+
     def subfunction(i):
         # Process each experiment in the sublist and return results
         # results = []
@@ -145,6 +178,7 @@ def run_experiment(n_threads=8):
     df = pd.DataFrame(all_results)
     df.to_csv("data/experiments.csv", index=False)
     return
+
 
 def split_list(n_experiments, n_threads):
     experiments = list(range(n_experiments))
@@ -177,8 +211,8 @@ def run_concurrently(n_experiments, n_threads, subfunction):
     return results
 
 
-
 def run():
+    # This is a optimal config under observed experiments.
     cfg = dict(
         gamma=0.99,
         net_arch=[8, 8],
@@ -187,19 +221,26 @@ def run():
         target_back_probs=True,
         reward_type="next state only",
         adv_coef=1.,
-        horizon=10,
+        horizon=20,
         n_epochs=100,
         policy_name="Hard Smax",
         n_traj=100,
         temp=5,
-        n_trials=10,
+        n_trials=1,
         n_states=6,
+        lr=0.001,
+        val_coef=0.0,
+        hard=False,
+        use_returns=True,
+        use_z=True,
+        kl_coef=1.0,
+        use_scheduler=False,
+        verbose=True,
     )
     results = run_config(cfg)
 
 
 def run_config(cfg):
-
     n_states = cfg["n_states"]
     gamma = cfg["gamma"]
     horizon = cfg["horizon"]
@@ -221,9 +262,9 @@ def run_config(cfg):
         if policy_name in new_env.policies.keys() and new_env.policies[policy_name] is not None:
             new_pi = new_env.policies[policy_name].pi
             pi = env.policies[policy_name].pi
-            kl_div_learned = (-pi*new_pi.log()).sum(dim=-1).mean().item()
-            min_kl_div = (-pi*pi.log()).sum(dim=-1).mean().item()
-            score = min_kl_div/kl_div_learned
+            kl_div_learned = (-pi * new_pi.log()).sum(dim=-1).mean().item()
+            min_kl_div = (-pi * pi.log()).sum(dim=-1).mean().item()
+            score = min_kl_div / kl_div_learned
             correl = exp_trainer.get_correl(learned_r, env.reward_vector)
             scores.append(score)
             correls.append(correl)
@@ -249,9 +290,33 @@ def run_gflow(cfg, nt_env):
         demonstrations=expert_rollouts,
         **filter_params(cfg, gflow.GFLOW)
     )
-    expert_trainer.train(n_epochs, log=False)
+    expert_trainer.train(n_epochs, log=cfg.get("verbose", False))
     return expert_trainer
 
 
+def load_experiment_results():
+    df = pd.read_csv("data/experiments.csv")
+
+    df.plot.scatter(x='correls_mean', y='scores_mean')
+    plt.show()
+
+    # [k for k,v in ranges.items() if len(v)>1]
+    diff_cols = ['target_back_probs', 'reward_type', 'adv_coef', 'n_traj', 'temp', 'val_coef', 'hard', 'use_returns',
+                 'use_z']
+    corr_cols = ['correls_mean', 'correls_std']
+    flt_df = df[df.correls_mean >= .9][diff_cols + corr_cols]
+    # significance_matrix(df, 'correls_mean', 'correls_std')
+
+    for i in range(3):
+        flt = np.ones(len(flt_df)).astype(bool)
+        for col in diff_cols:
+            vals, counts = np.unique(flt_df[col], return_counts=True)
+            if sum(counts == i) == 1:
+                flt = np.bitwise_and(flt, flt_df[col] != vals[counts == i][0])
+        flt_df = flt_df[flt]
+
+    df.iloc[90]
+
+
 if __name__ == "__main__":
-    run_experiment()
+    run()
