@@ -45,5 +45,5 @@ def get_policy_constructor(policy_constructor_type):
 
 
 if __name__ == "__main__":
-    for policy_constructor_type in ["hybrid", "flow"]:
+    for policy_constructor_type in ["flow", "hybrid"]:
         train_class(policy_constructor_type)
