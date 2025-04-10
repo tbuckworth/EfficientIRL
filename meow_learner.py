@@ -6,7 +6,7 @@ from private_login import wandb_login
 def train_class():
     import wandb
     # env_name = "seals:seals/Hopper-v1"
-    env_name = "Hopper-v5"
+    env_name = "Hopper-v4"
     n_envs = 8
     norm_reward = False
     seed = 42
