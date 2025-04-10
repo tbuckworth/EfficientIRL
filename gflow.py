@@ -146,6 +146,10 @@ class GFLOW:
     def reward_func(self) -> BasicRewardNet:
         return self.output_reward_function
 
+    @property
+    def state_reward_func(self) -> BasicRewardNet:
+        return self.output_reward_function
+
     def train(self, n_epochs, progress_bar=None, log=True):
         for epoch in range(n_epochs):
             if log and self.custom_logger is not None:
