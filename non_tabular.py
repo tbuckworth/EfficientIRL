@@ -275,6 +275,9 @@ def run_config(cfg):
     cfg["correls_std"] = np.std(correls)
 
     return cfg
+    x = learned_r - learned_r.min()
+    ((x/x.max())-0.5) * 20
+    env.reward_vector
 
 
 def run_gflow(cfg, nt_env):
