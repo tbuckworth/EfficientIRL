@@ -1,16 +1,21 @@
 from helper_local import create_envs_meow_imitation_compat
 from meow.meow_continuous_action import HybridPolicy, MEOW, create_envs_meow
 from private_login import wandb_login
+import wandb
 
 
 def train_class():
-    import wandb
     env_name = "seals:seals/Hopper-v1"
     # env_name = "Hopper-v4"
     n_envs = 8
     norm_reward = False
     seed = 42
+    tags = ["meow hybrid test"]
+    cfg = locals()
     wandb_login()
+    project = "EfficientIRL"
+    wandb.init(project=project, config=cfg, sync_tensorboard=True,
+               tags=cfg["tags"], resume="allow")
 
     envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
     # envs, test_envs = create_envs_meow(env_name, seed, n_envs)
