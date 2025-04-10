@@ -10,7 +10,7 @@ def evaluate(env, expert_trainer):
     rewards, _ = evaluate_policy(
         expert_trainer.policy, env, 10, return_episode_rewards=True
     )
-    return np.mean(rewards)
+    return np.mean(rewards), None, None
 
 def train_class():
     env_name = "seals:seals/Hopper-v1"
