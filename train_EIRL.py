@@ -79,6 +79,7 @@ def trainEIRL(algo="eirl",
               target_log_probs=False,
               use_scheduler=False,
               adv_coef=0.,
+              target_back_probs=False,
               ):
     if flip_cartpole_actions and not re.search("CartPole", env_name):
         raise Exception(f"flip_cartpole_actions only works for CartPole envs")

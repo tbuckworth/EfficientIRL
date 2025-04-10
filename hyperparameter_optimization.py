@@ -411,7 +411,7 @@ def search_gflow():
         hard=[False],
         reward_type=["next state only"],#["next state", "state", "state-action", "next state only"],
         training_increments=50,
-        extra_tags=["gflow0", "target_back"],
+        extra_tags=["gflow0", "target_back_fixed"],
         early_learning=False,
         env_name="seals:seals/CartPole-v0",
         gamma=0.98,
@@ -430,6 +430,7 @@ def search_gflow():
         val_coef=0.,
         adv_coef=1.0,
         use_scheduler = False,
+        reset_weights = [True, False],
     )
     bounds = dict(
         n_expert_demos=[20, 32],
