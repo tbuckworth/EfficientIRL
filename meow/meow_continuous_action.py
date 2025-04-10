@@ -169,6 +169,8 @@ class HybridPolicy(nn.Module):
         return self.encoder(obs)
 
     def predict(self, obs, state=None, episode_start=None, deterministic=None):
+        if isinstance(obs, np.ndarray):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         latents = self.encode(obs)
         return self.flow_policy.predict(latents, state, episode_start, deterministic)
 
