@@ -1,8 +1,16 @@
+import numpy as np
+from stable_baselines3.common.evaluation import evaluate_policy
+
 from helper_local import create_envs_meow_imitation_compat
 from meow.meow_continuous_action import HybridPolicy, MEOW, create_envs_meow
 from private_login import wandb_login
 import wandb
 
+def evaluate(env, expert_trainer):
+    rewards, _ = evaluate_policy(
+        expert_trainer.policy, env, 10, return_episode_rewards=True
+    )
+    return np.mean(rewards)
 
 def train_class():
     env_name = "seals:seals/Hopper-v1"
@@ -19,7 +27,7 @@ def train_class():
 
     envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
     # envs, test_envs = create_envs_meow(env_name, seed, n_envs)
-    learner = MEOW(envs, test_envs, policy_constructor=HybridPolicy)
+    learner = MEOW(envs, test_envs, policy_constructor=HybridPolicy, evaluate=evaluate)
     learner.learn(100_000, wandb=wandb)
 
 if __name__ == "__main__":
