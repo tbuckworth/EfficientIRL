@@ -182,6 +182,7 @@ class HybridPolicy(nn.Module):
 
     @torch.jit.ignore
     def sample(self, num_samples, obs, deterministic=False):
+        obs = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
         latents = self.encode(obs)
         return self.flow_policy.sample(num_samples, latents, deterministic)
 
@@ -201,6 +202,8 @@ class HybridPolicy(nn.Module):
         return self.flow_policy.get_v(latents)
 
     def entropy(self, obs, num_samples=10):
+        if isinstance(obs, np.ndarray):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         latents = self.encode(obs)
         return self.flow_policy.entropy(latents, num_samples)
 
