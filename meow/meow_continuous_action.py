@@ -15,7 +15,6 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
-from helper_local import import_wandb, create_envs_meow_imitation_compat
 # try:
 #     from cleanrl.nf.nets import MLP
 #     from cleanrl.nf.transforms import Preprocessing
@@ -26,7 +25,6 @@ from .nf.nets import MLP
 from .nf.transforms import Preprocessing
 from .nf.distributions import ConditionalDiagLinearGaussian
 from .nf.flows import MaskedCondAffineFlow, CondScaling
-from private_login import wandb_login
 
 
 @dataclass
@@ -758,18 +756,18 @@ class MEOW:
                             f"save agent to: {self.logdir} with best return {best_test_rewards} at step {global_step}")
 
 
-def train_class():
-    import wandb
-    env_name = "seals:seals/Hopper-v1"
-    n_envs = 8
-    norm_reward = False
-    seed = 42
-    wandb_login()
-
-    envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
-    learner = MEOW(envs, test_envs, policy_constructor=HybridPolicy)
-    learner.learn(100_000, wandb=wandb)
+# def train_class():
+#     import wandb
+#     env_name = "seals:seals/Hopper-v1"
+#     n_envs = 8
+#     norm_reward = False
+#     seed = 42
+#     wandb_login()
+#
+#     envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
+#     learner = MEOW(envs, test_envs, policy_constructor=HybridPolicy)
+#     learner.learn(100_000, wandb=wandb)
 
 
 if __name__ == '__main__':
-    train_class()
+    train()
