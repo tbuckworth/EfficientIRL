@@ -162,6 +162,8 @@ class HybridPolicy(nn.Module):
         self.encoder = MLP(layers_list, init="orthogonal")
         self.flow_policy = FlowPolicy(alpha, sigma_max, sigma_min, action_sizes, latent_sizes, device,
                                       hidden_layers, hidden_sizes, flow_layers, scale_hidden_sizes)
+        self.device = device
+        self.to(device)
 
     def encode(self, obs):
         return self.encoder(obs)
