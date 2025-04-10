@@ -651,7 +651,7 @@ class MEOW:
         for global_step in range(total_timesteps):
             # ALGO LOGIC: put action logic here
             if global_step < learning_starts and not self.warm_start:
-                actions = np.array([self.envs.action_space.sample() for _ in range(self.envs.num_self.envs)])
+                actions = np.array([self.envs.action_space.sample() for _ in range(self.envs.num_envs)])
             else:
                 self.policy.eval()
                 actions, _ = self.policy.sample(num_samples=obs.shape[0], obs=obs, deterministic=False)
