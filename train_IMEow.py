@@ -1,28 +1,23 @@
 import os
 
-import gymnasium as gym
 import numpy as np
 import torch
-from imitation.algorithms import bc
-from imitation.data import wrappers
-from imitation.rewards import reward_wrapper
 from imitation.util import logger as imit_logger
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 
-import helper_local
 import imeow
 from callbacks import RewardLoggerCallback
 # from CustomEnvMonitor import make_vec_env
-from helper_local import import_wandb, load_expert_transitions, get_policy_for, create_logdir, get_latest_model, \
-    init_policy_weights, load_env, get_config, load_reward_models, wrap_env_with_reward
-from meow.meow_continuous_action import FlowPolicy, MEOW, create_envs_meow
+from helper_local import import_wandb, load_expert_transitions, create_logdir, get_latest_model, \
+    get_config, load_reward_models, wrap_env_with_reward, \
+    create_envs_meow_imitation_compat
+from meow.meow_continuous_action import FlowPolicy, MEOW
 from modified_cartpole import overridden_vec_env
 
 # os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 wandb = import_wandb()
 
-import eirl
 from learner_configs import load_learner
 
 
@@ -163,10 +158,7 @@ def trainIMEow(algo="imeow",
         return
 
     # envs, test_envs = create_envs_meow(env_name, seed, n_envs)
-    _, envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
-    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
-    _, test_envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
-    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
+    envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
 
     env, wenv = override_env_and_wrap_reward(envs, env_name, expert_trainer, log_prob_adj_reward, n_envs, neg_reward,
                                              override_env_name, overrides)

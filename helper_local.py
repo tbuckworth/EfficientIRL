@@ -427,3 +427,11 @@ def wrap_env_with_reward(env, reward_func, neg_reward=False, rew_const_adj=0., r
 
 def wrap_cartpole_with_flipped_actions(venv):
     return CartpoleVecEnvActionFlipWrapper(venv)
+
+
+def create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed):
+    _, envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
+    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
+    _, test_envs = load_env(env_name, n_envs, seed, env_make_kwargs=None, norm_reward=norm_reward, pre_wrappers=
+    [lambda env: gym.wrappers.RescaleAction(env, min_action=-1.0, max_action=1.0)])
+    return envs, test_envs

@@ -3,6 +3,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 import gymnasium as gym
 import numpy as np
@@ -14,7 +15,7 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
-from helper_local import import_wandb
+from helper_local import import_wandb, create_envs_meow_imitation_compat
 # try:
 #     from cleanrl.nf.nets import MLP
 #     from cleanrl.nf.transforms import Preprocessing
@@ -115,17 +116,14 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     return thunk
 
 
-def init_Flow(sigma_max, sigma_min, action_sizes, state_sizes):
+def init_Flow(sigma_max, sigma_min, action_sizes, state_sizes, hidden_layers=2, hidden_sizes=64, flow_layers=2,
+              scale_hidden_sizes=256):
     init_parameter = "zero"
     init_parameter_flow = "orthogonal"
     dropout_rate_flow = 0.1
     dropout_rate_scale = 0.0
     layer_norm_flow = True
     layer_norm_scale = False
-    hidden_layers = 2
-    flow_layers = 2
-    hidden_sizes = 64
-    scale_hidden_sizes = 256
 
     # Construct the prior distribution and the linear transformation
     prior_list = [state_sizes] + [hidden_sizes] * hidden_layers + [action_sizes]
@@ -157,13 +155,69 @@ def init_Flow(sigma_max, sigma_min, action_sizes, state_sizes):
     return flows, q0
 
 
+class HybridPolicy(nn.Module):
+    def __init__(self, alpha, sigma_max, sigma_min, action_sizes, state_sizes, device,
+                 hidden_layers=0, hidden_sizes=16, flow_layers=1,
+                 scale_hidden_sizes=16, latent_sizes=8, mlp_hid_sizes=256, mlp_hid_layers=4):
+        super(HybridPolicy, self).__init__()
+        layers_list = [state_sizes] + [mlp_hid_sizes] * mlp_hid_layers + [latent_sizes]
+        self.encoder = MLP(layers_list, init="orthogonal")
+        self.flow_policy = FlowPolicy(alpha, sigma_max, sigma_min, action_sizes, latent_sizes, device,
+                                      hidden_layers, hidden_sizes, flow_layers, scale_hidden_sizes)
+
+    def encode(self, obs):
+        return self.encoder(obs)
+
+    def predict(self, obs, state=None, episode_start=None, deterministic=None):
+        latents = self.encode(obs)
+        return self.flow_policy.predict(latents, state, episode_start, deterministic)
+
+    def forward(self, obs, act):
+        latents = self.encode(obs)
+        return self.flow_policy.forward(latents, act)
+
+    # maybe we don't need this decorator?
+    @torch.jit.export
+    def inverse(self, obs, act):
+        latents = self.encode(obs)
+        return self.flow_policy.inverse(latents, act)
+
+    @torch.jit.ignore
+    def sample(self, num_samples, obs, deterministic=False):
+        latents = self.encode(obs)
+        return self.flow_policy.sample(num_samples, latents, deterministic)
+
+    @torch.jit.export
+    def log_prob(self, obs, act):
+        latents = self.encode(obs)
+        return self.flow_policy.log_prob(latents, act)
+
+    @torch.jit.export
+    def get_qv(self, obs, act):
+        latents = self.encode(obs)
+        return self.flow_policy.get_qv(latents, act)
+
+    @torch.jit.export
+    def get_v(self, obs):
+        latents = self.encode(obs)
+        return self.flow_policy.get_v(latents)
+
+    def entropy(self, obs, num_samples=10):
+        latents = self.encode(obs)
+        return self.flow_policy.entropy(latents, num_samples)
+
+
 class FlowPolicy(nn.Module):
-    def __init__(self, alpha, sigma_max, sigma_min, action_sizes, state_sizes, device):
+    def __init__(self, alpha, sigma_max, sigma_min, action_sizes, state_sizes, device,
+                 hidden_layers=2, hidden_sizes=64, flow_layers=2,
+                 scale_hidden_sizes=256
+                 ):
         super().__init__()
         self.device = device
         self.alpha = alpha
         self.action_shape = action_sizes
-        flows, q0 = init_Flow(sigma_max, sigma_min, action_sizes, state_sizes)
+        flows, q0 = init_Flow(sigma_max, sigma_min, action_sizes, state_sizes,
+                              hidden_layers, hidden_sizes, flow_layers, scale_hidden_sizes)
         self.flows = nn.ModuleList(flows).to(self.device)
         self.prior = q0.to(self.device)
 
@@ -527,19 +581,20 @@ class MEOW:
             buffer_size=int(1e6),
             logdir=None,
             evaluate=None,
+            policy_constructor:Callable=FlowPolicy,
     ):
         self.evaluate = evaluate
         self.logdir = logdir
         assert isinstance(envs.action_space, gym.spaces.Box), "only continuous action space is supported"
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.policy = FlowPolicy(
+        self.policy = policy_constructor(
             alpha=alpha,
             sigma_max=sigma_max,
             sigma_min=sigma_min,
             action_sizes=envs.action_space.shape[-1],
             state_sizes=envs.observation_space.shape[-1],
             device=device).to(device)
-        self.policy_target = FlowPolicy(
+        self.policy_target = policy_constructor(
             alpha=alpha,
             sigma_max=sigma_max,
             sigma_min=sigma_min,
@@ -579,7 +634,8 @@ class MEOW:
         self.buffer_size = buffer_size
 
     def learn(self, total_timesteps, learning_starts=5000, wandb=None, callback=None):
-        callback.cust_training_start(locals(), globals(), self.envs.num_envs)
+        if callback:
+            callback.cust_training_start(locals(), globals(), self.envs.num_envs)
 
         rb = ReplayBuffer(
             self.buffer_size,
@@ -606,8 +662,9 @@ class MEOW:
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, rewards, dones, infos = self.envs.step(actions)
             # maybe need to put dones here instead
-            callback.update_locals(locals())
-            callback.custom_step(global_step)
+            if callback:
+                callback.update_locals(locals())
+                callback.custom_step(global_step)
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             ep_stats = [info["episode"] for info in infos if "episode" in info]
@@ -701,5 +758,18 @@ class MEOW:
                             f"save agent to: {self.logdir} with best return {best_test_rewards} at step {global_step}")
 
 
+def train_class():
+    import wandb
+    env_name = "seals:seals/Hopper-v1"
+    n_envs = 8
+    norm_reward = False
+    seed = 42
+    wandb_login()
+
+    envs, test_envs = create_envs_meow_imitation_compat(env_name, n_envs, norm_reward, seed)
+    learner = MEOW(envs, test_envs, policy_constructor=HybridPolicy)
+    learner.learn(100_000, wandb=wandb)
+
+
 if __name__ == '__main__':
-    train()
+    train_class()
