@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 
 #############################
@@ -38,28 +39,6 @@ class TransformerExtractor(BaseFeaturesExtractor):
         return features
 
 
-# Specify our custom extractor for the policy.
-policy_kwargs = dict(
-    features_extractor_class=TransformerExtractor,
-    features_extractor_kwargs=dict(features_dim=64, d_model=32, nhead=4, num_layers=1)
-)
-
-#############################
-# Step 2: Train a PPO Agent on CartPole Using the Transformer Architecture
-#############################
-
-env = gym.make('CartPole-v1')
-model = PPO("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1)
-
-# Train for a short period for demonstration purposes.
-model.learn(total_timesteps=10000)
-model.save("ppo_cartpole_transformer")
-
-
-#############################
-# Step 3: Train a "CrossCoder" on the Transformer's Representations
-#############################
-
 # Define a dummy CrossCoder network that maps transformer features to the policy’s logits.
 class CrossCoder(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -84,50 +63,21 @@ def get_transformer_features(model, observations):
 # Create a dataset by running the environment and recording both features and policy logits.
 def create_dataset(model, env, num_samples=1000):
     features_list, logits_list = [], []
-    obs = env.reset()
+    obs = env.reset()  # obs now has shape (n_envs, 4)
     for _ in range(num_samples):
-        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
-        # Extract features using the transformer's extractor.
+        # obs is already a batch; remove unsqueeze(0)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).to(model.policy.features_extractor.embed.weight.device)
         features = model.policy.features_extractor(obs_tensor)
-        # Get policy logits from the PPO policy network.
         logits = model.policy.mlp_extractor.policy_net(features)
-        features_list.append(features.squeeze(0).numpy())
-        logits_list.append(logits.squeeze(0).numpy())
+        # Record data for every env in the vectorised batch
+        features_list.extend(features.detach().cpu().numpy())
+        logits_list.extend(logits.detach().cpu().numpy())
 
         action, _ = model.predict(obs, deterministic=True)
         obs, _, done, _ = env.step(action)
-        if done:
-            obs = env.reset()
+        # No need for individual reset checks; the vectorised env auto-resets done envs.
     return np.array(features_list), np.array(logits_list)
 
-
-# Build the dataset.
-X, Y = create_dataset(model, env, num_samples=1000)
-X_tensor = torch.tensor(X, dtype=torch.float32)
-Y_tensor = torch.tensor(Y, dtype=torch.float32)
-
-input_dim = X_tensor.shape[1]
-output_dim = Y_tensor.shape[1]
-crosscoder = CrossCoder(input_dim, output_dim)
-
-optimizer = optim.Adam(crosscoder.parameters(), lr=1e-3)
-criterion = nn.MSELoss()
-
-# Train the CrossCoder to mimic the policy’s output given the transformer features.
-epochs = 100
-for epoch in range(epochs):
-    optimizer.zero_grad()
-    outputs = crosscoder(X_tensor)
-    loss = criterion(outputs, Y_tensor)
-    loss.backward()
-    optimizer.step()
-    if epoch % 10 == 0:
-        print(f"Epoch {epoch}: Loss {loss.item()}")
-
-
-#############################
-# Step 4: "Extract" and Hard-Code the Algorithm
-#############################
 
 # In our toy example, we simulate extraction by wrapping the trained transformer extractor
 # and the crosscoder into a hard-coded policy. In practice, one might inspect or modify the network's
@@ -140,24 +90,81 @@ class HardCodedPolicy:
 
     def act(self, obs):
         with torch.no_grad():
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(self.features_extractor.embed.weight.device)
             features = self.features_extractor(obs_tensor)
             logits = self.crosscoder(features)
             probs = F.softmax(logits, dim=-1)
             action = torch.argmax(probs, dim=-1).item()
-        return action
+        return action.cpu().numpy()
 
 
-# Instantiate the hard-coded policy.
-hardcoded_policy = HardCodedPolicy(model.policy.features_extractor, crosscoder)
+def main():
+    # Specify our custom extractor for the policy.
+    policy_kwargs = dict(
+        features_extractor_class=TransformerExtractor,
+        features_extractor_kwargs=dict(features_dim=64, d_model=32, nhead=4, num_layers=1)
+    )
 
-# Test the new policy in the environment.
-obs = env.reset()
-total_reward = 0
-for _ in range(200):
-    action = hardcoded_policy.act(obs)
-    obs, reward, done, _ = env.step(action)
-    total_reward += reward
-    if done:
-        break
-print("Total reward using hard-coded policy:", total_reward)
+    #############################
+    # Step 2: Train a PPO Agent on CartPole Using the Transformer Architecture
+    #############################
+    env_id = "CartPole-v1"
+    num_envs = 8
+
+    # Create a list of environment creation functions
+    env_fns = [lambda: gym.make(env_id) for _ in range(num_envs)]
+    env = SubprocVecEnv(env_fns)
+
+    model = PPO("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1)
+
+    # Train for a short period for demonstration purposes.
+    model.learn(total_timesteps=10000)
+    model.save("ppo_cartpole_transformer")
+
+    #############################
+    # Step 3: Train a "CrossCoder" on the Transformer's Representations
+    #############################
+
+    # Build the dataset.
+    X, Y = create_dataset(model, env, num_samples=1000)
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    Y_tensor = torch.tensor(Y, dtype=torch.float32)
+
+    input_dim = X_tensor.shape[1]
+    output_dim = Y_tensor.shape[1]
+    crosscoder = CrossCoder(input_dim, output_dim)
+
+    optimizer = optim.Adam(crosscoder.parameters(), lr=1e-3)
+    criterion = nn.MSELoss()
+
+    # Train the CrossCoder to mimic the policy’s output given the transformer features.
+    epochs = 100
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        outputs = crosscoder(X_tensor)
+        loss = criterion(outputs, Y_tensor)
+        loss.backward()
+        optimizer.step()
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}: Loss {loss.item()}")
+
+    #############################
+    # Step 4: "Extract" and Hard-Code the Algorithm
+    #############################
+
+    # Instantiate the hard-coded policy.
+    hardcoded_policy = HardCodedPolicy(model.policy.features_extractor, crosscoder)
+
+    # Test the new policy in the environment.
+    obs = env.reset()
+    total_reward = 0
+    for _ in range(200):
+        action = hardcoded_policy.act(obs)
+        obs, reward, done, _ = env.step(action)
+        total_reward += reward
+        if done:
+            break
+    print("Total reward using hard-coded policy:", total_reward)
+
+if __name__ == "__main__":
+    main()
