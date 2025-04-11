@@ -109,7 +109,7 @@ def main():
     # Step 2: Train a PPO Agent on CartPole Using the Transformer Architecture
     #############################
     env_id = "CartPole-v1"
-    num_envs = 8
+    num_envs = 4
 
     # Create a list of environment creation functions
     env_fns = [lambda: gym.make(env_id) for _ in range(num_envs)]
