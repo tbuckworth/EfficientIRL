@@ -68,7 +68,8 @@ def create_dataset(model, env, num_samples=1000):
         # obs is already a batch; remove unsqueeze(0)
         obs_tensor = torch.tensor(obs, dtype=torch.float32).to(model.policy.features_extractor.embed.weight.device)
         features = model.policy.features_extractor(obs_tensor)
-        logits = model.policy.mlp_extractor.policy_net(features)
+        latents = model.policy.mlp_extractor.policy_net(features)
+        logits = model.policy.action_net(latents)
         # Record data for every env in the vectorised batch
         features_list.extend(features.detach().cpu().numpy())
         logits_list.extend(logits.detach().cpu().numpy())
