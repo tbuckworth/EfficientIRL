@@ -87,14 +87,16 @@ class HardCodedPolicy:
         self.features_extractor = features_extractor  # from the trained PPO model
         self.crosscoder = crosscoder
         self.crosscoder.eval()
+        self.device = self.features_extractor.embed.weight.device
+        self.crosscoder.to(device=self.device)
 
     def act(self, obs):
         with torch.no_grad():
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(self.features_extractor.embed.weight.device)
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
             features = self.features_extractor(obs_tensor)
             logits = self.crosscoder(features)
             probs = F.softmax(logits, dim=-1)
-            action = torch.argmax(probs, dim=-1).item()
+            action = torch.argmax(probs, dim=-1)
         return action.cpu().numpy()
 
 
@@ -118,7 +120,7 @@ def main():
     model = PPO("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1)
 
     # Train for a short period for demonstration purposes.
-    model.learn(total_timesteps=10000)
+    model.learn(total_timesteps=100000)
     model.save("ppo_cartpole_transformer")
 
     #############################
@@ -138,7 +140,7 @@ def main():
     criterion = nn.MSELoss()
 
     # Train the CrossCoder to mimic the policy’s output given the transformer features.
-    epochs = 100
+    epochs = 1000
     for epoch in range(epochs):
         optimizer.zero_grad()
         outputs = crosscoder(X_tensor)
