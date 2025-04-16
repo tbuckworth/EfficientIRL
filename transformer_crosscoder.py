@@ -112,10 +112,10 @@ def main():
     # Step 2: Train a PPO Agent on CartPole Using the Transformer Architecture
     #############################
     env_id = "CartPole-v1"
-    num_envs = 4
+    n_envs = 4
 
     # Create a list of environment creation functions
-    env_fns = [lambda: gym.make(env_id) for _ in range(num_envs)]
+    env_fns = [lambda: gym.make(env_id) for _ in range(n_envs)]
     env = SubprocVecEnv(env_fns)
 
     model = PPO("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1)
@@ -160,14 +160,16 @@ def main():
 
     # Test the new policy in the environment.
     obs = env.reset()
-    total_reward = 0
-    for _ in range(200):
+    total_reward = np.zeros(n_envs)
+    ep_rews = []
+    for _ in range(1000):
         action = hardcoded_policy.act(obs)
         obs, reward, done, _ = env.step(action)
         total_reward += reward
-        if done:
-            break
-    print("Total reward using hard-coded policy:", total_reward)
+        if done.any():
+            ep_rews += total_reward[done].to_list()
+            total_reward[done] = 0
+    print("Total reward using hard-coded policy:", ep_rews.mean())
 
 if __name__ == "__main__":
     main()
