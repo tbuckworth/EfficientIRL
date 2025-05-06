@@ -903,7 +903,7 @@ class OneStep(TabularMDP):
 
 
 class DiffParents(TabularMDP):
-    def __init__(self, gamma=GAMMA, custom_only=False):
+    def __init__(self, gamma=GAMMA, custom_only=False, R=None):
         n_states = 6
         n_actions = 2
         T = torch.zeros(n_states, n_actions, n_states)
@@ -913,8 +913,9 @@ class DiffParents(TabularMDP):
         T[3, 0, 1] = 1
         T[3, 1, 4] = 1
 
-        R = torch.zeros(n_states)
-        R[1] = 1
+        if R is None:
+            R = torch.zeros(n_states)
+            R[1] = 1
         mu = torch.zeros(n_states)
         mu[(0, 3),] = 0.5
 
@@ -961,7 +962,7 @@ class OneStepOther(TabularMDP):
 
 
 class DogSatMat(TabularMDP):
-    def __init__(self, gamma=GAMMA):
+    def __init__(self, gamma=GAMMA, R=None):
         # The _ sat on the _
         # actions are dog/cat/mat/floor.
         chars = "_DCMF"
@@ -991,11 +992,12 @@ class DogSatMat(TabularMDP):
                 ns_idx = states[''.join(next_state)]
                 T[s_idx, a_idx, ns_idx] = 1
 
-        R = torch.zeros(n_states)
-        for state in ["DM", "CM"]:
-            R[states[state]] = np.log(9)
-        for state in ["DF", "CF"]:
-            R[states[state]] = np.log(1)
+        if R is None:
+            R = torch.zeros(n_states)
+            for state in ["DM", "CM"]:
+                R[states[state]] = np.log(9)
+            for state in ["DF", "CF"]:
+                R[states[state]] = np.log(1)
 
         mu = torch.zeros(n_states)
         mu[states["__"]] = 1
@@ -1027,7 +1029,7 @@ class RandMDP(TabularMDP):
 
 
 class CustMDP(TabularMDP):
-    def __init__(self, gamma=GAMMA):
+    def __init__(self, gamma=GAMMA, R=None):
         n_states = 6
         n_actions = 2
         T = torch.tensor(
@@ -1043,14 +1045,15 @@ class CustMDP(TabularMDP):
               [0.1423, 0.0786, 0.0535, 0.4766, 0.1001, 0.1488]],
              [[0.0330, 0.0479, 0.0361, 0.3026, 0.5278, 0.0526],
               [0.4085, 0.1154, 0.2842, 0.0448, 0.0637, 0.0835]]])
-        R = torch.tensor([1.3675e-05, 1.1792e-03, 1.2642e-06, 1.0816e-01, 2.5503e-05, 9.8906e+00])
+        if R is None:
+            R = torch.tensor([1.3675e-05, 1.1792e-03, 1.2642e-06, 1.0816e-01, 2.5503e-05, 9.8906e+00])
         mu = torch.tensor([0.0686, 0.1983, 0.1976, 0.1412, 0.1533, 0.2409]).log().softmax(dim=0)
         T = T.log().softmax(dim=-1)
         super().__init__(n_states, n_actions, T, R, mu, gamma, "Weird Failure")
 
 
 class MattGridworld(TabularMDP):
-    def __init__(self, gamma=GAMMA, N=5):
+    def __init__(self, gamma=GAMMA, N=5, R=None):
         n_states = N * N
 
         actions = ['up', 'down', 'left', 'right']
@@ -1098,10 +1101,11 @@ class MattGridworld(TabularMDP):
 
                     T[s, a_idx, ns_intended] += 0.9
                     T[s, a_idx, ns_opposite] += 0.1
-        U = torch.rand(n_states)
+        if R is None:
+            R = torch.rand(n_states)
         mu = torch.zeros(n_states)
         mu[0] = 1
-        super().__init__(n_states, n_actions, T, U, mu, gamma, "Matt Gridworld")
+        super().__init__(n_states, n_actions, T, R, mu, gamma, "Matt Gridworld")
 
 
 irl_func_list = [DisentangledEIRL, NextValEIRL]
