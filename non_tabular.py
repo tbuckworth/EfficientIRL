@@ -1,4 +1,5 @@
 import threading
+import time
 from typing import List
 
 import numpy as np
@@ -9,7 +10,7 @@ from tqdm import tqdm
 
 import gflow
 from helper_local import DictToArgs, filter_params
-from tabular import TabularMDP, AscenderLong
+from tabular import TabularMDP, AscenderLong, OneStep, MattGridworld, CustMDP, DogSatMat
 import gymnasium
 import concurrent.futures
 
@@ -113,6 +114,8 @@ def get_idx(i, lens):
     return output
 
 
+
+
 def run_experiment(n_threads=8):
     ranges = dict(
         gamma=[0.99],
@@ -136,31 +139,33 @@ def run_experiment(n_threads=8):
         use_z=[True, False],
         kl_coef=[1.],
         use_scheduler=[False],
+        env_cons=AscenderLong,
     )
-    # # test ranges:
-    # ranges = dict(
-    #     gamma=[0.99],
-    #     net_arch=[[8, 8]],
-    #     log_prob_loss=["kl"],
-    #     target_log_probs=[True],
-    #     target_back_probs=[True, False],
-    #     reward_type=["next state only", "state"],
-    #     adv_coef=[0],
-    #     horizon=[7],
-    #     n_epochs=[10],
-    #     policy_name=["Hard Smax"],
-    #     n_traj=[20],
-    #     temp=[1],
-    #     n_trials=[3],
-    #     n_states=[6],
-    #     lr=[1e-3],
-    #     val_coef=[0],
-    #     hard=[True],
-    #     use_returns=[True],
-    #     use_z=[True],
-    #     kl_coef=[1.],
-    #     use_scheduler=[False],
-    # )
+    # test ranges:
+    ranges = dict(
+        gamma=[0.99],
+        net_arch=[[8, 8]],
+        log_prob_loss=["kl"],
+        target_log_probs=[True],
+        target_back_probs=[True],
+        reward_type=["next state only"],
+        adv_coef=[1.],
+        horizon=[20],
+        n_epochs=[100],
+        policy_name=["Hard Smax"],
+        n_traj=[100],
+        temp=[5],
+        n_trials=[10],
+        n_states=[6],
+        lr=[1e-3],
+        val_coef=[0],
+        hard=[False],
+        use_returns=[True],
+        use_z=[True],
+        kl_coef=[1.],
+        use_scheduler=[False],
+        env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
+    )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
     print(f"Running {n_experiments} experiments across {n_threads} threads")
@@ -176,7 +181,8 @@ def run_experiment(n_threads=8):
 
     all_results = run_concurrently(n_experiments, n_threads, subfunction)
     df = pd.DataFrame(all_results)
-    df.to_csv("data/experiments.csv", index=False)
+    run_name = f"data/experiments_{time.strftime("%Y-%m-%d__%H-%M-%S")}.csv"
+    df.to_csv(run_name, index=False)
     return
 
 
@@ -211,8 +217,7 @@ def run_concurrently(n_experiments, n_threads, subfunction):
     return results
 
 
-def run():
-    # This is a optimal config under observed experiments.
+def run(env_cons=AscenderLong,):
     cfg = dict(
         gamma=0.99,
         net_arch=[8, 8],
@@ -236,18 +241,20 @@ def run():
         kl_coef=1.0,
         use_scheduler=False,
         verbose=True,
+        env_cons=env_cons,
     )
     results = run_config(cfg)
 
 
 def run_config(cfg):
-    n_states = cfg["n_states"]
-    gamma = cfg["gamma"]
     horizon = cfg["horizon"]
     n_trials = cfg["n_trials"]
     policy_name = cfg["policy_name"]
+    env_cons = cfg["env_cons"]
 
-    env = AscenderLong(n_states=n_states, gamma=gamma)
+    env_args = filter_params(cfg, env_cons)
+
+    env = env_cons(**env_args)
     nt_env = NonTabularMDP(env, horizon)
     scores = []
     correls = []
@@ -257,7 +264,8 @@ def run_config(cfg):
         states = torch.arange(nt_env.n_states)
         obs = nt_env.get_state(states)
         learned_r = exp_trainer.reward_func(obs.to(torch.float32), None, obs.to(torch.float32), None).detach()
-        new_env = AscenderLong(n_states=env.n_states, gamma=gamma, R=learned_r)
+        env_args["R"] = learned_r
+        new_env = env_cons(**env_args)
 
         if policy_name in new_env.policies.keys() and new_env.policies[policy_name] is not None:
             new_pi = new_env.policies[policy_name].pi
@@ -322,4 +330,4 @@ def load_experiment_results():
 
 
 if __name__ == "__main__":
-    run()
+    run_experiment()

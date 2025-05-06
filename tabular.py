@@ -877,15 +877,16 @@ class AscenderLong(TabularMDP):
 
 
 class OneStep(TabularMDP):
-    def __init__(self, gamma=GAMMA):
+    def __init__(self, gamma=GAMMA, R=None):
         n_states = 5
         n_actions = 2
         T = torch.zeros(n_states, n_actions, n_states)
         T[:2, 0, 2] = 1
         T[:2, 1, 3] = 1
         T[2:, :, -1] = 1  # /n_actions
-        R = torch.zeros(n_states)
-        R[2] = 1
+        if R is None:
+            R = torch.zeros(n_states)
+            R[2] = 1
         mu = torch.zeros(n_states)
         mu[:2] = 0.5
 
