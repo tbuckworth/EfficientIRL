@@ -149,8 +149,8 @@ def run_experiment(n_threads=8):
         target_log_probs=[True],
         target_back_probs=[True],
         reward_type=["next state only"],
-        adv_coef=[1.],
-        horizon=[20],
+        adv_coef=[1., 0.],
+        horizon=[7, 50],
         n_epochs=[100],
         policy_name=["Hard Smax"],
         n_traj=[100],
@@ -159,9 +159,9 @@ def run_experiment(n_threads=8):
         n_states=[6],
         lr=[1e-3],
         val_coef=[0],
-        hard=[False],
-        use_returns=[True],
-        use_z=[True],
+        hard=[False, True],
+        use_returns=[True, False],
+        use_z=[True, False],
         kl_coef=[1.],
         use_scheduler=[False],
         env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
@@ -327,6 +327,20 @@ def load_experiment_results():
         flt_df = flt_df[flt]
 
     df.iloc[90]
+
+def load_experiment_results_2():
+    df0 = pd.read_csv("data/experiments.csv")
+    df = pd.read_csv("data/experiments_2025-05-06__11-19-36.csv")
+
+    for col in df.columns:
+        vals, counts = np.unique(df[col], return_counts=True)
+        if len(vals) == 1:
+            tmp = df0[df0[col] == vals[0]]
+            if len(tmp) == 0:
+                print("huh?")
+            df0 = tmp
+
+
 
 
 if __name__ == "__main__":
