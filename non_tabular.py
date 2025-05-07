@@ -259,7 +259,11 @@ def run_config(cfg):
     scores = []
     correls = []
     for i in range(n_trials):
-        exp_trainer = run_gflow(cfg, nt_env)
+        try:
+            exp_trainer = run_gflow(cfg, nt_env)
+        except Exception as e:
+            print(f"Error in trial {i}: {e}")
+            continue
 
         states = torch.arange(nt_env.n_states)
         obs = nt_env.get_state(states)
