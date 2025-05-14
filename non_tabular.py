@@ -335,6 +335,7 @@ def load_experiment_results():
 def load_experiment_results_2():
     df0 = pd.read_csv("data/experiments.csv")
     df = pd.read_csv("data/experiments_2025-05-06__11-19-36.csv")
+    df = pd.read_csv("data/experiments_2025-05-09__02-17-26.csv")
 
     for col in df.columns:
         vals, counts = np.unique(df[col], return_counts=True)
@@ -348,4 +349,4 @@ def load_experiment_results_2():
 
 
 if __name__ == "__main__":
-    run_experiment()
+    load_experiment_results_2()
