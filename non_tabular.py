@@ -144,13 +144,13 @@ def run_experiment(n_threads=8):
     # test ranges:
     ranges = dict(
         gamma=[0.99],
-        net_arch=[[8, 8]],
+        net_arch=[[8, 8], [64, 64]],
         log_prob_loss=["kl"],
         target_log_probs=[True],
         target_back_probs=[True],
         reward_type=["next state only"],
-        adv_coef=[1., 0.],
-        horizon=[7, 50],
+        adv_coef=[0.],
+        horizon=[10],
         n_epochs=[100],
         policy_name=["Hard Smax"],
         n_traj=[100],
@@ -159,11 +159,13 @@ def run_experiment(n_threads=8):
         n_states=[6],
         lr=[1e-3],
         val_coef=[0],
-        hard=[False, True],
-        use_returns=[True, False],
+        hard=[True],
+        use_returns=[True],
         use_z=[True, False],
         kl_coef=[1.],
         use_scheduler=[False],
+        split_training=[None, 0.2],
+        value_is_potential=[False],
         env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
     )
     lens = [len(v) for k, v in ranges.items()]
@@ -305,7 +307,7 @@ def run_gflow(cfg, nt_env):
         demonstrations=expert_rollouts,
         **filter_params(cfg, gflow.GFLOW)
     )
-    expert_trainer.train(n_epochs, log=cfg.get("verbose", False))
+    expert_trainer.train(n_epochs, log=cfg.get("verbose", False), split_training=cfg.get("split_training", None))
     return expert_trainer
 
 
@@ -346,7 +348,43 @@ def load_experiment_results_2():
             df0 = tmp
 
 
+def run_individual():
+    cfg = dict(
+        gamma=0.99,
+        net_arch=[64, 64, 64],
+        log_prob_loss="kl",
+        target_log_probs=True,
+        target_back_probs=True,
+        reward_type="next state only",
+        adv_coef=0.,
+        horizon=100,
+        n_epochs=200,
+        policy_name="Hard Smax",
+        n_traj=100,
+        temp=1,
+        n_trials=10,
+        n_states=6,
+        lr=1e-3,
+        val_coef=0,
+        hard=True,
+        use_returns=True,
+        use_z=True,
+        kl_coef=1.,
+        use_scheduler=False,
+        env_cons=MattGridworld,
+        verbose=True,
+        split_training=0.3,
+        value_is_potential=False,
+    )
+    env_cons = cfg["env_cons"]
+    horizon = cfg["horizon"]
+    env_args = filter_params(cfg, env_cons)
+
+    env = env_cons(**env_args)
+    nt_env = NonTabularMDP(env, horizon)
+    exp_trainer = run_gflow(cfg, nt_env)
+
 
 
 if __name__ == "__main__":
-    load_experiment_results_2()
+    run_experiment(n_threads=8)

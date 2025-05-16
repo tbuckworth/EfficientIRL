@@ -1,7 +1,7 @@
 import numpy as np
 import gymnasium as gym
 import torch
-from imitation.rewards.reward_nets import BasicRewardNet, ShapedRewardNet
+from imitation.rewards.reward_nets import BasicRewardNet, ShapedRewardNet, BasicPotentialMLP
 from matplotlib import pyplot as plt
 from stable_baselines3.common.policies import ActorCriticPolicy
 
@@ -61,8 +61,10 @@ class GFLOW:
                  target_back_probs=False,
                  use_scheduler=False,
                  n_epochs=None,
+                 value_is_potential=True,
                  ):
-        assert(not n_epochs is None and use_scheduler, "use_scheduler requires n_epochs (predicted total training epochs")
+        assert not (n_epochs is None and use_scheduler), "use_scheduler requires n_epochs (predicted total training epochs"
+        self.value_is_potential = value_is_potential
         self.n_epochs = n_epochs
         self.use_scheduler = use_scheduler
         self.stats = {}
@@ -111,16 +113,26 @@ class GFLOW:
             use_action=use_action,
             use_next_state=use_next_state
         )
+
+        nets = [self.forward_policy, self.backward_policy, self.output_reward_function, self.Z_param]
+        param_list = list(self.forward_policy.parameters()) + list(self.backward_policy.parameters()) + list(
+            self.output_reward_function.parameters()) + [self.Z_param]
+        if self.value_is_potential:
+            pot_net = value_func
+        else:
+            pot_net = BasicPotentialMLP(
+                observation_space=observation_space,
+                hid_sizes=net_arch,
+            )
+            nets += [pot_net]
+            param_list += list(pot_net.parameters())
         self.reward_net = CustomShapedRewardNet(
             self.output_reward_function,
-            value_func,
+            pot_net,
             gamma)
-        nets = [self.forward_policy, self.backward_policy, self.output_reward_function, self.Z_param]
         _ = [n.to(device=self.device) for n in nets]
-        self.optimizer = torch.optim.Adam(list(self.forward_policy.parameters()) +
-                                          list(self.backward_policy.parameters()) +
-                                          list(self.output_reward_function.parameters()) +
-                                          [self.Z_param],
+
+        self.optimizer = torch.optim.Adam(param_list,
                                           lr=lr)
         if self.use_scheduler:
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.n_epochs,
@@ -128,7 +140,7 @@ class GFLOW:
         if self.log_prob_loss == "kl":
             self.maybe_optimize_log_probs = lambda lf: -lf.mean()
         elif self.log_prob_loss == "chi_square":
-            self.maybe_optimize_log_probs = lambda lf: -(lf-(2*lf.pow(2))).mean()
+            self.maybe_optimize_log_probs = lambda lf: -(lf - (2 * lf.pow(2))).mean()
         elif self.log_prob_loss is None:
             if self.target_log_probs:
                 raise Exception("forward policy won't learn if log_prob_loss is None and target_log_probs is True")
@@ -150,12 +162,20 @@ class GFLOW:
     def state_reward_func(self) -> BasicRewardNet:
         return self.output_reward_function
 
-    def train(self, n_epochs, progress_bar=None, log=True):
+    def train(self, n_epochs, progress_bar=None, log=True, split_training=None):
+        assert split_training is None or (0 < split_training < 1), "split_training must be between 0 and 1 or None"
         for epoch in range(n_epochs):
+            if split_training is None:
+                loss_calc = self.compute_all_losses
+            elif epoch < split_training*n_epochs:
+                loss_calc = self.compute_log_prob_losses
+            else:
+                loss_calc = self.compute_trajectory_balance_losses
+
             if log and self.custom_logger is not None:
                 self.custom_logger.record("epoch", epoch)
             for traj in self.rng.permutation(self.demonstrations):
-                loss, stats = self.trajectory_balance_loss(traj)
+                loss, stats = loss_calc(traj)
                 loss.backward()
                 self.optimizer.step()
                 if self.use_scheduler:
@@ -165,7 +185,7 @@ class GFLOW:
             if log:
                 self.log(epoch)
 
-    def trajectory_balance_loss(self, traj):
+    def compute_all_losses(self, traj):
         obs = torch.FloatTensor(traj.obs).to(device=self.device)
         acts = torch.FloatTensor(traj.acts).to(device=self.device)
         infos = traj.infos
@@ -175,7 +195,7 @@ class GFLOW:
         true_rews = traj.rews
 
         # obs has one extra observation (terminal)
-        values, log_forwards, entropy = self.forward_policy.evaluate_actions(obs[..., :-1,:], acts)
+        values, log_forwards, entropy = self.forward_policy.evaluate_actions(obs[..., :-1, :], acts)
         _, log_backwards, _ = self.backward_policy.evaluate_actions(obs[..., 1:, :], acts)
         log_Z = torch.log(self.Z_param + 1e-8) if self.use_z else 0
         rew_acts = self.maybe_one_hot(acts)
@@ -190,7 +210,7 @@ class GFLOW:
         disc_val = discounts * values.squeeze()
 
         val_target = disc_rew.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
-        value_loss = ((disc_val - val_target)/discounts).pow(2).mean()
+        value_loss = ((disc_val - val_target) / discounts).pow(2).mean()
 
         kl_loss = self.maybe_optimize_log_probs(log_forwards)
         if self.target_back_probs:
@@ -236,6 +256,67 @@ class GFLOW:
         }
         return loss, stats
 
+    def compute_log_prob_losses(self, traj):
+        obs = torch.FloatTensor(traj.obs).to(device=self.device)
+        acts = torch.FloatTensor(traj.acts).to(device=self.device)
+        done = torch.zeros_like(acts).to(device=self.device)
+        # if we batch trajs, then will have to modify this
+        done[-1] = 1 if traj.terminal else 0
+
+        # obs has one extra observation (terminal)
+        _, log_forwards, _ = self.forward_policy.evaluate_actions(obs[..., :-1, :], acts)
+        _, log_backwards, _ = self.backward_policy.evaluate_actions(obs[..., 1:, :], acts)
+
+        kl_loss = self.maybe_optimize_log_probs(log_forwards)
+        if self.target_back_probs:
+            kl_loss = kl_loss + self.maybe_optimize_log_probs(log_backwards)
+
+        stats = {
+            "gflow/kl_loss": kl_loss.item(),
+        }
+        return kl_loss, stats
+
+    def compute_trajectory_balance_losses(self, traj):
+        assert not self.value_is_potential, "reward potential net must not be policy value function if training kl and traj balance separately.\nSet value_is_potential=False in GFLOW init."
+        obs = torch.FloatTensor(traj.obs).to(device=self.device)
+        acts = torch.FloatTensor(traj.acts).to(device=self.device)
+        infos = traj.infos
+        done = torch.zeros_like(acts).to(device=self.device)
+        # if we batch trajs, then will have to modify this
+        done[-1] = 1 if traj.terminal else 0
+        true_rews = traj.rews
+
+        # obs has one extra observation (terminal)
+        with torch.no_grad():
+            _, log_forwards, _ = self.forward_policy.evaluate_actions(obs[..., :-1, :], acts)
+            _, log_backwards, _ = self.backward_policy.evaluate_actions(obs[..., 1:, :], acts)
+        log_Z = torch.log(self.Z_param + 1e-8) if self.use_z else 0
+        rew_acts = self.maybe_one_hot(acts)
+        rewards, dis_rewards = self.reward_net.forward_trajectory(obs, rew_acts, done, None)
+
+        log_forward = log_forwards.cumsum(dim=-1)
+        log_backward = log_backwards.cumsum(dim=-1)
+        if self.use_returns:
+            discounts = torch.full_like(rewards, self.gamma)
+            discounts[..., 0] = 1
+            discounts = discounts.cumprod(dim=-1)
+            disc_rew = discounts * rewards
+            reward = disc_rew.cumsum(dim=-1)
+        else:
+            reward = rewards.cumsum(dim=-1)
+        balance_loss = (log_Z + log_forward - reward - log_backward).pow(2).mean()
+
+        reward_advantage_correl = self.get_correl(rewards, true_rews)
+        reward_correl = self.get_correl(dis_rewards, true_rews)
+        if not np.isnan(reward_correl) and reward_correl > 0.95:
+            pass
+        stats = {
+            "gflow/balance_loss": balance_loss.item(),
+            "gflow/reward_correl": reward_correl,
+            "gflow/reward_advantage_correl": reward_advantage_correl,
+        }
+        return balance_loss, stats
+
     def maybe_one_hot(self, acts):
         if self.one_hot:
             return torch.nn.functional.one_hot(acts.to(torch.int64), self.action_space.n).to(device=self.policy.device)
@@ -243,7 +324,7 @@ class GFLOW:
 
     def accum_stats(self, stats):
         if self.stats == {}:
-            self.stats = {k:[v] for k, v in stats.items()}
+            self.stats = {k: [v] for k, v in stats.items()}
         else:
             [self.stats[k].append(v) for k, v in stats.items()]
 
@@ -263,20 +344,17 @@ class GFLOW:
 
     def get_correl(self, a, b, plot=False):
         # not set up for batch dims.
-        #flatten?
+        # flatten?
         if not isinstance(a, np.ndarray):
             a = a.squeeze().detach().cpu().numpy()
         if not isinstance(b, np.ndarray):
             b = b.squeeze().detach().cpu().numpy()
-        if b.std()==0:
+        if b.std() == 0:
             return np.nan
-        assert(len(a) == len(b))
+        assert (len(a) == len(b))
         if plot:
             # plt.scatter(x=b,y=b,label="True Rewards",color="black")
-            plt.scatter(x=b,y=a,label="Learned Rewards")
+            plt.scatter(x=b, y=a, label="Learned Rewards")
             plt.legend()
             plt.show()
-        return np.corrcoef(a, b)[0,1]
-
-
-
+        return np.corrcoef(a, b)[0, 1]
