@@ -13,7 +13,7 @@ from helper_local import DictToArgs, filter_params
 from tabular import TabularMDP, AscenderLong, OneStep, MattGridworld, CustMDP, DogSatMat
 import gymnasium
 import concurrent.futures
-
+import traceback
 
 def significance_matrix(df, mean_col, std_col):
     from scipy.stats import norm
@@ -164,7 +164,7 @@ def run_experiment(n_threads=8):
         use_z=[True, False],
         kl_coef=[1.],
         use_scheduler=[False],
-        split_training=[None, 0.2],
+        split_training=[0.2],
         value_is_potential=[False],
         env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
     )
@@ -264,7 +264,8 @@ def run_config(cfg):
         try:
             exp_trainer = run_gflow(cfg, nt_env)
         except Exception as e:
-            print(f"Error in trial {i}: {e}")
+            print(f"Error in trial {i}:")
+            traceback.print_exc()
             continue
 
         states = torch.arange(nt_env.n_states)
@@ -338,6 +339,7 @@ def load_experiment_results_2():
     df0 = pd.read_csv("data/experiments.csv")
     df = pd.read_csv("data/experiments_2025-05-06__11-19-36.csv")
     df = pd.read_csv("data/experiments_2025-05-09__02-17-26.csv")
+    df = pd.read_csv("data/experiments_2025-05-16__19-36-05.csv")
 
     for col in df.columns:
         vals, counts = np.unique(df[col], return_counts=True)
@@ -351,14 +353,14 @@ def load_experiment_results_2():
 def run_individual():
     cfg = dict(
         gamma=0.99,
-        net_arch=[64, 64, 64],
+        net_arch=[64, 64],
         log_prob_loss="kl",
         target_log_probs=True,
         target_back_probs=True,
         reward_type="next state only",
         adv_coef=0.,
         horizon=100,
-        n_epochs=200,
+        n_epochs=100,
         policy_name="Hard Smax",
         n_traj=100,
         temp=1,
@@ -373,11 +375,12 @@ def run_individual():
         use_scheduler=False,
         env_cons=MattGridworld,
         verbose=True,
-        split_training=0.3,
+        split_training=0.2,
         value_is_potential=False,
     )
     env_cons = cfg["env_cons"]
     horizon = cfg["horizon"]
+    run_config(cfg)
     env_args = filter_params(cfg, env_cons)
 
     env = env_cons(**env_args)
@@ -387,4 +390,5 @@ def run_individual():
 
 
 if __name__ == "__main__":
+    # run_individual()
     run_experiment(n_threads=8)
