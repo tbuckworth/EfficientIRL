@@ -390,5 +390,5 @@ def run_individual():
 
 
 if __name__ == "__main__":
-    run_individual()
-    # run_experiment(n_threads=8)
+    # run_individual()
+    run_experiment(n_threads=8)
