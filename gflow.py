@@ -323,10 +323,8 @@ class GFLOW:
         return acts
 
     def accum_stats(self, stats):
-        if self.stats == {}:
-            self.stats = {k: [v] for k, v in stats.items()}
-        else:
-            [self.stats[k].append(v) for k, v in stats.items()]
+        for k, v in stats.items():
+            self.stats[k].append(v) if k in self.stats.keys() else self.stats[k] = [v]
 
     def log(self, epoch):
         for k, v in self.stats.items():

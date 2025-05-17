@@ -360,7 +360,7 @@ def run_individual():
         reward_type="next state only",
         adv_coef=0.,
         horizon=100,
-        n_epochs=100,
+        n_epochs=10,
         policy_name="Hard Smax",
         n_traj=100,
         temp=1,
@@ -390,5 +390,5 @@ def run_individual():
 
 
 if __name__ == "__main__":
-    # run_individual()
-    run_experiment(n_threads=8)
+    run_individual()
+    # run_experiment(n_threads=8)
