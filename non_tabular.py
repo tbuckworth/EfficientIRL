@@ -353,14 +353,14 @@ def load_experiment_results_2():
 def run_individual():
     cfg = dict(
         gamma=0.99,
-        net_arch=[64, 64],
+        net_arch=[64, 64, 64],
         log_prob_loss="kl",
         target_log_probs=True,
         target_back_probs=True,
         reward_type="next state only",
         adv_coef=0.,
         horizon=100,
-        n_epochs=10,
+        n_epochs=200,
         policy_name="Hard Smax",
         n_traj=100,
         temp=1,
@@ -375,7 +375,7 @@ def run_individual():
         use_scheduler=False,
         env_cons=MattGridworld,
         verbose=True,
-        split_training=0.2,
+        split_training=0.3,
         value_is_potential=False,
     )
     env_cons = cfg["env_cons"]
