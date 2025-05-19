@@ -117,30 +117,30 @@ def get_idx(i, lens):
 
 
 def run_experiment(n_threads=8):
-    ranges = dict(
-        gamma=[0.99],
-        net_arch=[[8, 8]],
-        log_prob_loss=["kl"],
-        target_log_probs=[True],
-        target_back_probs=[True, False],
-        reward_type=["next state only", "state"],
-        adv_coef=[0, 1.],
-        horizon=[7],
-        n_epochs=[100],
-        policy_name=["Hard Smax"],
-        n_traj=[20, 100],
-        temp=[1, 5],
-        n_trials=[5],
-        n_states=[6],
-        lr=[1e-3],
-        val_coef=[0, 0.5],
-        hard=[True, False],
-        use_returns=[True, False],
-        use_z=[True, False],
-        kl_coef=[1.],
-        use_scheduler=[False],
-        env_cons=AscenderLong,
-    )
+    # ranges = dict(
+    #     gamma=[0.99],
+    #     net_arch=[[8, 8]],
+    #     log_prob_loss=["kl"],
+    #     target_log_probs=[True],
+    #     target_back_probs=[True, False],
+    #     reward_type=["next state only", "state"],
+    #     adv_coef=[0, 1.],
+    #     horizon=[7],
+    #     n_epochs=[100],
+    #     policy_name=["Hard Smax"],
+    #     n_traj=[20, 100],
+    #     temp=[1, 5],
+    #     n_trials=[5],
+    #     n_states=[6],
+    #     lr=[1e-3],
+    #     val_coef=[0, 0.5],
+    #     hard=[True, False],
+    #     use_returns=[True, False],
+    #     use_z=[True, False],
+    #     kl_coef=[1.],
+    #     use_scheduler=[False],
+    #     env_cons=AscenderLong,
+    # )
     # test ranges:
     ranges = dict(
         gamma=[0.99],
@@ -150,11 +150,11 @@ def run_experiment(n_threads=8):
         target_back_probs=[True],
         reward_type=["next state only"],
         adv_coef=[0.],
-        horizon=[100],
+        horizon=[7, 100],
         n_epochs=[300],
         policy_name=["Hard Smax"],
         n_traj=[30],
-        temp=[1],
+        temp=[1, 3],
         n_trials=[5],
         n_states=[6],
         lr=[1e-3],
@@ -166,7 +166,7 @@ def run_experiment(n_threads=8):
         use_scheduler=[False],
         split_training=[0.3],
         value_is_potential=[False],
-        env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
+        env_cons=[AscenderLong, DogSatMat],#[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
     )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
