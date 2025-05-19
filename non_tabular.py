@@ -15,6 +15,7 @@ import gymnasium
 import concurrent.futures
 import traceback
 
+
 def significance_matrix(df, mean_col, std_col):
     from scipy.stats import norm
 
@@ -114,8 +115,6 @@ def get_idx(i, lens):
     return output
 
 
-
-
 def run_experiment(n_threads=8):
     # ranges = dict(
     #     gamma=[0.99],
@@ -150,10 +149,10 @@ def run_experiment(n_threads=8):
         target_back_probs=[True],
         reward_type=["next state only"],
         adv_coef=[0.],
-        horizon=[7, 100],
-        n_epochs=[300],
+        horizon=[3, 4, 5],
+        n_epochs=[100],
         policy_name=["Hard Smax"],
-        n_traj=[30],
+        n_traj=[10],
         temp=[1, 3],
         n_trials=[5],
         n_states=[6],
@@ -166,7 +165,7 @@ def run_experiment(n_threads=8):
         use_scheduler=[False],
         split_training=[0.3],
         value_is_potential=[False],
-        env_cons=[AscenderLong, DogSatMat],#[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
+        env_cons=[DogSatMat],  # [OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
     )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
@@ -219,7 +218,7 @@ def run_concurrently(n_experiments, n_threads, subfunction):
     return results
 
 
-def run(env_cons=AscenderLong,):
+def run(env_cons=AscenderLong, ):
     cfg = dict(
         gamma=0.99,
         net_arch=[8, 8],
@@ -294,7 +293,7 @@ def run_config(cfg):
 
     return cfg
     x = learned_r - learned_r.min()
-    ((x/x.max())-0.5) * 20
+    ((x / x.max()) - 0.5) * 20
     env.reward_vector
 
 
@@ -337,6 +336,7 @@ def load_experiment_results():
         flt_df = flt_df[flt]
 
     df.iloc[90]
+
 
 def load_experiment_results_2():
     df0 = pd.read_csv("data/experiments.csv")
@@ -395,6 +395,7 @@ def run_individual():
 
     exp_trainer
 
+
 def tmp():
     state = torch.tensor([
         [1, 0, 0, 0],
@@ -413,8 +414,8 @@ def tmp():
         [0, 0, 0, 1],
         [0, 0, 0, 1],
         [0, 0, 0, 1],
-    ]).to(device="cuda",dtype=torch.float32)
-    action = torch.tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,0, 1, 2, 3]
+    ]).to(device="cuda", dtype=torch.float32)
+    action = torch.tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]
                           ).to(device="cuda", dtype=torch.float32)
     next_state = torch.tensor([
         [1, 0, 0, 0],
