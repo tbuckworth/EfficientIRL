@@ -144,27 +144,27 @@ def run_experiment(n_threads=8):
     # test ranges:
     ranges = dict(
         gamma=[0.99],
-        net_arch=[[8, 8], [64, 64]],
+        net_arch=[[64, 64, 64]],
         log_prob_loss=["kl"],
         target_log_probs=[True],
         target_back_probs=[True],
         reward_type=["next state only"],
         adv_coef=[0.],
-        horizon=[10],
-        n_epochs=[100],
+        horizon=[100],
+        n_epochs=[300],
         policy_name=["Hard Smax"],
-        n_traj=[100],
-        temp=[5],
-        n_trials=[10],
+        n_traj=[30],
+        temp=[1],
+        n_trials=[5],
         n_states=[6],
         lr=[1e-3],
         val_coef=[0],
         hard=[True],
         use_returns=[True],
-        use_z=[True, False],
+        use_z=[True],
         kl_coef=[1.],
         use_scheduler=[False],
-        split_training=[0.2],
+        split_training=[0.3],
         value_is_potential=[False],
         env_cons=[OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
     )
@@ -258,6 +258,7 @@ def run_config(cfg):
 
     env = env_cons(**env_args)
     nt_env = NonTabularMDP(env, horizon)
+    target_ret = env.evaluate_policy(nt_env.env.policies[policy_name])
     scores = []
     correls = []
     for i in range(n_trials):
@@ -275,11 +276,13 @@ def run_config(cfg):
         new_env = env_cons(**env_args)
 
         if policy_name in new_env.policies.keys() and new_env.policies[policy_name] is not None:
-            new_pi = new_env.policies[policy_name].pi
-            pi = env.policies[policy_name].pi
-            kl_div_learned = (-pi * new_pi.log()).sum(dim=-1).mean().item()
-            min_kl_div = (-pi * pi.log()).sum(dim=-1).mean().item()
-            score = min_kl_div / kl_div_learned
+            new_policy = new_env.policies[policy_name]
+            ret = env.evaluate_policy(new_policy)
+            # new_pi = new_env.policies[policy_name].pi
+            # pi = env.policies[policy_name].pi
+            # kl_div_learned = (-pi * new_pi.log()).sum(dim=-1).mean().item()
+            # min_kl_div = (-pi * pi.log()).sum(dim=-1).mean().item()
+            score = ret / target_ret if target_ret != 0 else np.nan
             correl = exp_trainer.get_correl(learned_r, env.reward_vector)
             scores.append(score)
             correls.append(correl)
@@ -360,11 +363,11 @@ def run_individual():
         reward_type="next state only",
         adv_coef=0.,
         horizon=100,
-        n_epochs=200,
+        n_epochs=300,
         policy_name="Hard Smax",
-        n_traj=100,
+        n_traj=20,
         temp=1,
-        n_trials=10,
+        n_trials=3,
         n_states=6,
         lr=1e-3,
         val_coef=0,
@@ -377,16 +380,63 @@ def run_individual():
         verbose=True,
         split_training=0.3,
         value_is_potential=False,
+        # N=2,
+        # R=torch.tensor([0.1,0.5,0.3,0.2]),
     )
+    cfg = run_config(cfg)
+    print(cfg["scores_mean"])
     env_cons = cfg["env_cons"]
     horizon = cfg["horizon"]
-    run_config(cfg)
     env_args = filter_params(cfg, env_cons)
 
     env = env_cons(**env_args)
     nt_env = NonTabularMDP(env, horizon)
     exp_trainer = run_gflow(cfg, nt_env)
 
+    exp_trainer
+
+def tmp():
+    state = torch.tensor([
+        [1, 0, 0, 0],
+        [1, 0, 0, 0],
+        [1, 0, 0, 0],
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+        [0, 0, 0, 1],
+        [0, 0, 0, 1],
+        [0, 0, 0, 1],
+    ]).to(device="cuda",dtype=torch.float32)
+    action = torch.tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,0, 1, 2, 3]
+                          ).to(device="cuda", dtype=torch.float32)
+    next_state = torch.tensor([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1],
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+    ]).to(device="cuda", dtype=torch.float32)
+    done = torch.zeros_like(action).to(device="cuda", dtype=torch.float32)
+    done[-1] = 1.
+    next_value = value = None
 
 
 if __name__ == "__main__":
