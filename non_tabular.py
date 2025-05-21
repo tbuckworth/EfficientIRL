@@ -1,3 +1,4 @@
+import argparse
 import threading
 import time
 from typing import List
@@ -445,4 +446,7 @@ def tmp():
 
 if __name__ == "__main__":
     # run_individual()
-    run_experiment(n_threads=10)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_threads", type=int, default=8)
+    args = parser.parse_args()
+    run_experiment(n_threads=args.n_threads)
