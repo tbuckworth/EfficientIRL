@@ -873,6 +873,7 @@ class AscenderLong(TabularMDP):
         go_left[-1] = 0.5
         self.go_left = TabularPolicy("Go Left", go_left)
         self.custom_policies = [self.go_left]
+        self.horizon = n_states * 2
         super().__init__(n_states, n_actions, T, R, mu, gamma, f"Ascender: {int((n_states - 2) // 2)} Pos States")
 
 
@@ -899,6 +900,7 @@ class OneStep(TabularMDP):
         self.consistent = TabularPolicy("Consistent", consistent_pi)
         self.inconsistent = TabularPolicy("Inconsistent", inconsistent_pi)
         self.custom_policies = [self.consistent, self.inconsistent]
+        self.horizon = 2
         super().__init__(n_states, n_actions, T, R, mu, gamma, "One Step")
 
 
@@ -1015,6 +1017,7 @@ class DogSatMat(TabularMDP):
         llm_pi[flt] = 1 / n_actions
         self.llm = TabularPolicy("LLM", llm_pi)
         self.custom_policies = [self.llm]
+        self.horizon = 4
         super().__init__(n_states, n_actions, T, R, mu, gamma, "Dog Sat Mat")
 
 
@@ -1049,6 +1052,7 @@ class CustMDP(TabularMDP):
             R = torch.tensor([1.3675e-05, 1.1792e-03, 1.2642e-06, 1.0816e-01, 2.5503e-05, 9.8906e+00])
         mu = torch.tensor([0.0686, 0.1983, 0.1976, 0.1412, 0.1533, 0.2409]).log().softmax(dim=0)
         T = T.log().softmax(dim=-1)
+        self.horizon = 50
         super().__init__(n_states, n_actions, T, R, mu, gamma, "Weird Failure")
 
 
@@ -1105,6 +1109,7 @@ class MattGridworld(TabularMDP):
             R = torch.rand(n_states)
         mu = torch.zeros(n_states)
         mu[0] = 1
+        self.horizon = n_states * 4
         super().__init__(n_states, n_actions, T, R, mu, gamma, "Matt Gridworld")
 
 

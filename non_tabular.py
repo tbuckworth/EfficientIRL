@@ -48,6 +48,8 @@ def significance_matrix(df, mean_col, std_col):
 
 class NonTabularMDP:
     def __init__(self, tabular_mdp: TabularMDP, horizon: int, device=None):
+        if horizon < 1:
+            horizon = tabular_mdp.horizon
         assert horizon > 1, "horizon must be greater than 1"
         self.horizon = horizon
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -146,26 +148,27 @@ def run_experiment(n_threads=8):
         net_arch=[[64, 64, 64]],
         log_prob_loss=["kl"],
         target_log_probs=[True],
-        target_back_probs=[True],
+        target_back_probs=[False],
+        uniform_back_probs=[True],
         reward_type=["next state only"],
-        adv_coef=[0.],
-        horizon=[3, 4, 5],
+        adv_coef=[0., 0.1],
+        horizon=[0],
         n_epochs=[100],
-        policy_name=["Hard Smax"],
+        policy_name=["Soft"],
         n_traj=[10],
         temp=[1, 3],
-        n_trials=[5],
+        n_trials=[3],
         n_states=[6],
         lr=[1e-3],
-        val_coef=[0],
-        hard=[True],
+        val_coef=[0, 0.1],
+        hard=[True, False],
         use_returns=[True],
         use_z=[True],
         kl_coef=[1.],
         use_scheduler=[False],
-        split_training=[0.3],
+        split_training=[0.3, None],
         value_is_potential=[False],
-        env_cons=[DogSatMat],  # [OneStep, AscenderLong, MattGridworld, CustMDP, DogSatMat],
+        env_cons=[DogSatMat, OneStep, AscenderLong, MattGridworld, CustMDP],
     )
     lens = [len(v) for k, v in ranges.items()]
     n_experiments = np.prod(lens)
@@ -442,4 +445,4 @@ def tmp():
 
 if __name__ == "__main__":
     # run_individual()
-    run_experiment(n_threads=5)
+    run_experiment(n_threads=10)
