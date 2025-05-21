@@ -4,6 +4,8 @@ import torch
 from imitation.rewards.reward_nets import BasicRewardNet, ShapedRewardNet, BasicPotentialMLP
 from matplotlib import pyplot as plt
 from stable_baselines3.common.policies import ActorCriticPolicy
+from torch import nn
+from torch.distributions import Categorical
 
 from helper_local import get_policy_for
 
@@ -36,6 +38,30 @@ class CustomShapedRewardNet(ShapedRewardNet):
         return self.forward(state[:-1], action, state[1:], done, value, next_value)
 
 
+class UniformPolicy(nn.Module):
+    def __init__(self, n_actions):
+        self.n_actions = n_actions
+        super().__init__()
+
+    def forward(self, x):
+        return torch.zeros(x.shape[:-1] + (self.n_actions,)).to(device=x.device).log_softmax(dim=-1)
+
+    def evaluate_actions(self, obs, actions):
+        """
+        Evaluate actions according to the current policy,
+        given the observations.
+
+        :param obs: Observation
+        :param actions: Actions
+        :return: None, log likelihood of taking those actions
+            and entropy of the action distribution.
+        """
+        logits = self.forward(obs)
+        dist = Categorical(logits=logits)
+        log_prob = dist.log_prob(actions)
+        entropy = dist.entropy()
+        return None, log_prob, entropy
+
 class GFLOW:
     def __init__(self,
                  observation_space,
@@ -62,8 +88,13 @@ class GFLOW:
                  use_scheduler=False,
                  n_epochs=None,
                  value_is_potential=True,
+                 uniform_back_probs=False,
                  ):
-        assert not (n_epochs is None and use_scheduler), "use_scheduler requires n_epochs (predicted total training epochs"
+        if uniform_back_probs and target_back_probs:
+            print("uniform_back_probs and target_back_probs are mutually exclusive. Setting target_back_probs=False")
+            target_back_probs = False
+        assert not (
+                    n_epochs is None and use_scheduler), "use_scheduler requires n_epochs (predicted total training epochs"
         self.value_is_potential = value_is_potential
         self.n_epochs = n_epochs
         self.use_scheduler = use_scheduler
@@ -72,6 +103,7 @@ class GFLOW:
         self.target_log_probs = target_log_probs
         self.log_prob_loss = log_prob_loss
         self.target_back_probs = target_back_probs
+        self.uniform_back_probs = uniform_back_probs
         self.kl_coef = kl_coef
         self.adv_coef = adv_coef
         self.use_z = use_z
@@ -94,7 +126,7 @@ class GFLOW:
 
         self.Z_param = torch.nn.Parameter(torch.tensor(1.0))
         self.forward_policy = get_policy_for(observation_space, action_space, net_arch)
-        self.backward_policy = get_policy_for(observation_space, action_space, net_arch)
+        self.backward_policy = get_policy_for(observation_space, action_space, net_arch) if uniform_back_probs else UniformPolicy(action_space)
 
         value_func = lambda obs: self.forward_policy.predict_values(obs).squeeze()
 
@@ -167,7 +199,7 @@ class GFLOW:
         for epoch in range(n_epochs):
             if split_training is None:
                 loss_calc = self.compute_all_losses
-            elif epoch < split_training*n_epochs:
+            elif epoch < split_training * n_epochs:
                 loss_calc = self.compute_log_prob_losses
             else:
                 loss_calc = self.compute_trajectory_balance_losses
