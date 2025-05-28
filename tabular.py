@@ -873,7 +873,7 @@ class AscenderLong(TabularMDP):
         go_left[-1] = 0.5
         self.go_left = TabularPolicy("Go Left", go_left)
         self.custom_policies = [self.go_left]
-        self.horizon = n_states * 2
+        self.horizon = n_states ** 2
         super().__init__(n_states, n_actions, T, R, mu, gamma, f"Ascender: {int((n_states - 2) // 2)} Pos States")
 
 
@@ -900,7 +900,7 @@ class OneStep(TabularMDP):
         self.consistent = TabularPolicy("Consistent", consistent_pi)
         self.inconsistent = TabularPolicy("Inconsistent", inconsistent_pi)
         self.custom_policies = [self.consistent, self.inconsistent]
-        self.horizon = 2
+        self.horizon = 3
         super().__init__(n_states, n_actions, T, R, mu, gamma, "One Step")
 
 

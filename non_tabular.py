@@ -149,10 +149,10 @@ def run_experiment(n_threads=8):
         net_arch=[[64, 64, 64]],
         log_prob_loss=["kl"],
         target_log_probs=[True],
-        target_back_probs=[False],
-        uniform_back_probs=[True],
+        target_back_probs=[True],
+        uniform_back_probs=[True, False],
         reward_type=["next state only"],
-        adv_coef=[0., 0.1],
+        adv_coef=[0., 0.1, 0.5, 1., 2.],
         horizon=[0],
         n_epochs=[100],
         policy_name=["Soft"],
@@ -161,13 +161,13 @@ def run_experiment(n_threads=8):
         n_trials=[3],
         n_states=[6],
         lr=[1e-3],
-        val_coef=[0, 0.1],
-        hard=[True, False],
+        val_coef=[0., 0.1, 0.5, 1., 2.],
+        hard=[True],
         use_returns=[True],
         use_z=[True],
-        kl_coef=[1.],
+        kl_coef=[0., 0.1, 0.5, 1., 2.],
         use_scheduler=[False],
-        split_training=[0.3, None],
+        split_training=[None],
         value_is_potential=[False],
         env_cons=[DogSatMat, OneStep, AscenderLong, MattGridworld, CustMDP],
     )
@@ -295,7 +295,10 @@ def run_config(cfg):
     cfg["correls_mean"] = np.mean(correls)
     cfg["correls_std"] = np.std(correls)
 
-    return cfg
+    output = cfg.copy()
+    output["horizon"] = nt_env.horizon
+
+    return output
     x = learned_r - learned_r.min()
     ((x / x.max()) - 0.5) * 20
     env.reward_vector
